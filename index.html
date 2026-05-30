@@ -398,9 +398,9 @@ select.form-control{cursor:pointer;}
 
 <!-- Sidebar -->
 <nav class="sidebar" id="sidebar">
-  <div class="sidebar-logo">
-    <img id="sidebarLogo" src="" alt="Dental City Clinic" style="width:150px;height:auto;display:block;margin-bottom:6px;filter:brightness(1.05) drop-shadow(0 2px 4px rgba(0,0,0,0.3))">
-    <p>Connected Care, Better Smiles</p>
+  <div class="sidebar-logo" style="text-align:center">
+    <img id="sidebarLogo" src="" alt="Dental City Clinic" style="width:150px;height:auto;display:block;margin:0 auto 6px;filter:brightness(1.05) drop-shadow(0 2px 4px rgba(0,0,0,0.3))">
+    <p style="text-align:center">Connected Care, Better Smiles</p>
   </div>
   <div class="nav" id="nav"></div>
   <div class="sidebar-footer">
@@ -747,6 +747,7 @@ a{color:#2563EB;text-decoration:none}
     <div class="pid">Patient ID: ${esc(pid)}</div>
     ${p.branch?`<div class="branch-tag">🏢 ${esc(p.branch)}</div>`:''}
   </div>
+  <img src="${_DC_LOGO_RECEIPT}" style="width:70px;height:auto;flex-shrink:0;opacity:0.9;align-self:flex-start" crossorigin="anonymous">
 </div>
 <div class="body">
   ${allergyBlock}
