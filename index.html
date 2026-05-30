@@ -747,7 +747,6 @@ a{color:#2563EB;text-decoration:none}
     <div class="pid">Patient ID: ${esc(pid)}</div>
     ${p.branch?`<div class="branch-tag">🏢 ${esc(p.branch)}</div>`:''}
   </div>
-  <img src="${_DC_LOGO_RECEIPT}" style="width:70px;height:auto;flex-shrink:0;opacity:0.9;align-self:flex-start" crossorigin="anonymous">
 </div>
 <div class="body">
   ${allergyBlock}
@@ -783,9 +782,9 @@ a{color:#2563EB;text-decoration:none}
   </div>
 
   <div class="footer">
-    <img src="${_DC_LOGO_RECEIPT}" style="width:100px;height:auto;margin:0 auto 8px;display:block;opacity:0.8" crossorigin="anonymous"><br>
-    Connected Care, Better Smiles<br>
-    ${new Date().toLocaleDateString('en-PH',{year:'numeric',month:'long',day:'numeric'})}
+    <img src="${_DC_LOGO_RECEIPT}" style="width:120px;height:auto;margin:0 auto 8px;display:block" crossorigin="anonymous">
+    <div style="margin-top:4px">Connected Care, Better Smiles</div>
+    <div style="margin-top:4px">${new Date().toLocaleDateString('en-PH',{year:'numeric',month:'long',day:'numeric'})}</div>
   </div>
 </div>
 </body></html>`;
