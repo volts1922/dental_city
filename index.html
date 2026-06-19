@@ -2640,6 +2640,32 @@ function renderAccountsTable(){
 }
 
 // ── Merge Duplicate Branch Names ──────────────────────────────────────────────
+
+// ── One-time cleanup: normalize "Manila Branch" -> "Manila" ──────────────────
+function _autoCleanupManilaBranch(){
+  if(currentRole !== 'Developer') return;
+  if(localStorage.getItem('_manilaCleanupDone')) return;
+
+  const accounts = getAllAccounts();
+  let changed = 0;
+  Object.entries(accounts).forEach(([u,a])=>{
+    if(a.branch === 'Manila Branch'){ a.branch = 'Manila'; changed++; }
+  });
+  if(changed) _saveAccounts(accounts);
+
+  ['patients','appointments','treatments','billing'].forEach(table=>{
+    const data = load(KEYS[table]) || {};
+    let recordsChanged = 0;
+    Object.keys(data).forEach(id=>{
+      if(data[id].branch === 'Manila Branch'){ data[id].branch = 'Manila'; recordsChanged++; }
+    });
+    if(recordsChanged) save(KEYS[table], data);
+  });
+
+  localStorage.setItem('_manilaCleanupDone','1');
+  if(changed) console.log('✅ Auto-cleanup: merged Manila Branch -> Manila ('+changed+' accounts)');
+}
+
 function showMergeBranches(){
   const accounts = getAllAccounts();
   const slugGroups = {};
@@ -3240,7 +3266,7 @@ function _dashSearchPatients(q){
 }
 
 function showDashboard(){
-  if(currentRole==='Developer') setTimeout(_populateDevBranchSwitcher, 200);
+  if(currentRole==='Developer'){ setTimeout(_populateDevBranchSwitcher, 200); _autoCleanupManilaBranch(); }
   // Auto-sync for Owner/Admin so they always see latest data from all branches
   if((currentRole==='Owner'||currentRole==='Admin'||currentRole==='Developer') && !window._dashSyncing){
     window._dashSyncing = true;
