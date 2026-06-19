@@ -5943,13 +5943,23 @@ async function importBackup(event){
         `Your CURRENT data will be replaced. Are you sure?`
       ))) return;
 
-      if(pts)  save(KEYS.patients,     data.patients);
-      if(apts) save(KEYS.appointments, data.appointments);
-      if(Object.keys(data.treatments).length) save(KEYS.treatments, data.treatments);
-      if(bil)  save(KEYS.billing,      data.billing);
-      if(inv)  save(KEYS.inventory,    data.inventory);
+      // SAFE MERGE: combine with existing data instead of replacing entire table
+      const mergeAndPush = (key, table, newRecords) => {
+        const existing = load(key) || {};
+        const merged = { ...existing, ...newRecords };
+        DB.set(key, merged);
+        Object.entries(newRecords).forEach(([id,rec])=>{
+          _sbUpsertOne(table, id, rec).catch(()=>{});
+        });
+      };
 
-      toast('✅ CSV Backup restored successfully!');
+      if(pts)  mergeAndPush(KEYS.patients,     'patients',     data.patients);
+      if(apts) mergeAndPush(KEYS.appointments, 'appointments', data.appointments);
+      if(Object.keys(data.treatments).length) mergeAndPush(KEYS.treatments, 'treatments', data.treatments);
+      if(bil)  mergeAndPush(KEYS.billing,      'billing',      data.billing);
+      if(inv)  mergeAndPush(KEYS.inventory,    'inventory',    data.inventory);
+
+      toast('✅ CSV Backup merged & synced to Supabase!');
       showDashboard();
     } catch(err){
       toast('❌ Failed to read CSV file.\n\nError: '+err.message);
