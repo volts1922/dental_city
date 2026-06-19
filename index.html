@@ -1156,6 +1156,8 @@ const save = (k, v, _changedId=null) => {
 const _BRANCH_KEY = 'dc_default_branchname';
 
 function getBranchName(){
+  // Developer with a branch selected in switcher — view that branch like a BranchAdmin
+  if(currentRole === 'Developer' && window._devOverrideBranch) return window._devOverrideBranch;
   // Owner and Admin see all branches — no branch filter
   if(currentRole === 'Owner' || currentRole === 'Admin' || currentRole === 'Developer') return '';
 
@@ -1567,13 +1569,17 @@ function _populateDevBranchSwitcher(){
 let _devViewBranch = '';
 function devSwitchBranchView(branchName){
   _devViewBranch = branchName;
+  window._devOverrideBranch = branchName || null;
+  // Update topbar badge to reflect current view
+  const badge = document.getElementById('branchBadge');
+  const nameBadge = document.getElementById('branchNameBadge');
   if(branchName){
-    // Temporarily filter view as if logged into that branch (read-only context)
-    window._devOverrideBranch = branchName;
     toast('👁️ Viewing: ' + branchName);
+    if(badge) badge.style.display = 'flex';
+    if(nameBadge) nameBadge.textContent = '👁️ ' + branchName;
   } else {
-    window._devOverrideBranch = null;
     toast('👁️ Viewing: All Branches');
+    if(badge) badge.style.display = 'none';
   }
   showDashboard();
 }
@@ -2187,7 +2193,7 @@ let _loggedInUser = null; // tracks the username key of the logged-in user
 function isAdmin(){ return currentRole === 'Admin' || currentRole === 'BranchAdmin' || currentRole === 'Developer'; }
 function isOwner(){ return currentRole === 'Owner' || currentRole === 'Developer'; }
 function isBranchAdmin(){ return currentRole === 'BranchAdmin'; }
-function canSeeAllBranches(){ return currentRole === 'Owner' || currentRole === 'Admin' || currentRole === 'Developer'; }
+function canSeeAllBranches(){ if(currentRole==='Developer' && window._devOverrideBranch) return false; return currentRole === 'Owner' || currentRole === 'Admin' || currentRole === 'Developer'; }
 
 // ── Branch filter — Staff only sees their own branch data ─────────────────────
 function _myBranch(){ return canSeeAllBranches() ? '' : (getBranchName() || 'Main Branch'); }
@@ -5491,10 +5497,7 @@ async function showCloudBackups(){
       if(myBranch) allFolders = [_branchSlug(myBranch)];
     }
 
-    // Developer branch switcher override — narrow to selected branch only
-    if(currentRole==='Developer' && window._devOverrideBranch){
-      allFolders = [_branchSlug(window._devOverrideBranch)];
-    }
+
 
     if(!allFolders.length){
       document.getElementById('modalBody').innerHTML = `
