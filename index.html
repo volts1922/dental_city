@@ -492,6 +492,11 @@ select.form-control{cursor:pointer;}
     <span id="branchNameBadge" style="background:var(--navy);color:#fff;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:600;"></span>
     <button onclick="changeBranchName()" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--muted)" title="Change branch name">✏</button>
   </div>
+  <div id="devBranchSwitcher" style="display:none;align-items:center;gap:6px;margin-right:12px">
+    <select id="devBranchSelect" onchange="devSwitchBranchView(this.value)" style="background:#7C3AED;color:#fff;border:none;border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer">
+      <option value="">🏢 Switch Branch View</option>
+    </select>
+  </div>
   <div id="userBadge" style="display:none;align-items:center;gap:8px;margin-right:8px">
     <button onclick="smartRefresh()" title="Sync and refresh" style="background:#ECFDF5;border:1.5px solid #059669;border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer;color:#059669;font-weight:700">☁️ Sync & Refresh</button>
 
@@ -1541,6 +1546,36 @@ function showBranchSetupModal(){
   if(!getBranchName()){
     document.querySelector('.modal-close').style.display = 'none';
   }
+}
+
+
+// ── Developer Branch Switcher — quick view any branch's data without logout ──
+function _populateDevBranchSwitcher(){
+  if(currentRole !== 'Developer') return;
+  const sel = document.getElementById('devBranchSelect');
+  const wrap = document.getElementById('devBranchSwitcher');
+  if(!sel || !wrap) return;
+  wrap.style.display = 'flex';
+
+  const accounts = getAllAccounts();
+  const branches = [...new Set(Object.values(accounts).filter(a=>a.branch).map(a=>a.branch))].sort();
+
+  sel.innerHTML = '<option value="">🏢 All Branches (Developer)</option>' +
+    branches.map(b=>`<option value="${_esc(b)}" ${_devViewBranch===b?'selected':''}>${_esc(b)}</option>`).join('');
+}
+
+let _devViewBranch = '';
+function devSwitchBranchView(branchName){
+  _devViewBranch = branchName;
+  if(branchName){
+    // Temporarily filter view as if logged into that branch (read-only context)
+    window._devOverrideBranch = branchName;
+    toast('👁️ Viewing: ' + branchName);
+  } else {
+    window._devOverrideBranch = null;
+    toast('👁️ Viewing: All Branches');
+  }
+  showDashboard();
 }
 
 function changeBranchName(){
@@ -3114,6 +3149,7 @@ function _dashSearchPatients(q){
 }
 
 function showDashboard(){
+  if(currentRole==='Developer') setTimeout(_populateDevBranchSwitcher, 200);
   // Auto-sync for Owner/Admin so they always see latest data from all branches
   if((currentRole==='Owner'||currentRole==='Admin'||currentRole==='Developer') && !window._dashSyncing){
     window._dashSyncing = true;
@@ -5406,6 +5442,7 @@ async function _pruneCloudBackups(branch, cfg){
 async function showCloudBackups(){
   const cfg = getSBConfig();
   if(!cfg.url||!cfg.key){ toast('⚠️ Supabase not configured'); return; }
+  // Developer branch override will filter results below
 
   openModal('☁️ Cloud Backups', `
     <div style="text-align:center;padding:20px">
@@ -5452,6 +5489,11 @@ async function showCloudBackups(){
     } else {
       // Branch staff: only their own branch
       if(myBranch) allFolders = [_branchSlug(myBranch)];
+    }
+
+    // Developer branch switcher override — narrow to selected branch only
+    if(currentRole==='Developer' && window._devOverrideBranch){
+      allFolders = [_branchSlug(window._devOverrideBranch)];
     }
 
     if(!allFolders.length){
