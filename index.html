@@ -5381,10 +5381,10 @@ async function _uploadBackupToCloud(snapshot){
 
 async function _pruneCloudBackups(branch, cfg){
   try{
-    const res = await fetch(cfg.url+'/storage/v1/object/list/backups/'+branch,{
+    const res = await fetch(cfg.url+'/storage/v1/object/list/backups',{
       method:'POST',
       headers:{'apikey':cfg.key,'Authorization':'Bearer '+cfg.key,'Content-Type':'application/json'},
-      body: JSON.stringify({limit:100,offset:0,sortBy:{column:'created_at',order:'asc'}})
+      body: JSON.stringify({limit:100,offset:0,prefix:branch+'/',sortBy:{column:'created_at',order:'asc'}})
     });
     if(!res.ok) return;
     const files = await res.json();
@@ -5463,15 +5463,19 @@ async function showCloudBackups(){
     let allFiles = [];
     for(const folder of allFolders){
       try{
-        const r = await fetch(cfg.url+'/storage/v1/object/list/backups/'+folder,{
+        const r = await fetch(cfg.url+'/storage/v1/object/list/backups',{
           method:'POST',
           headers:{'apikey':cfg.key,'Authorization':'Bearer '+cfg.key,'Content-Type':'application/json'},
-          body: JSON.stringify({limit:20,offset:0,prefix:'',sortBy:{column:'created_at',order:'desc'}})
+          body: JSON.stringify({limit:20,offset:0,prefix:folder+'/',sortBy:{column:'created_at',order:'desc'}})
         });
         if(r.ok){
           const files = await r.json();
           if(Array.isArray(files)){
-            files.forEach(f=>allFiles.push({folder, name:f.name, created:f.created_at||''}));
+            files.forEach(f=>{
+              // Strip folder prefix from name (e.g. "bgc/bgc_123.csv" -> "bgc_123.csv")
+              const fname = f.name ? f.name.replace(folder+'/', '') : '';
+              if(fname) allFiles.push({folder, name:fname, created:f.created_at||''});
+            });
           }
         }
       }catch(e){}
