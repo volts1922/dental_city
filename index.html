@@ -5420,17 +5420,25 @@ async function showCloudBackups(){
     // Build folder list
     let allFolders = [];
     if(isAll){
-      // Developer/Owner/Admin: directly list all folders from Supabase Storage
+      // Developer/Owner/Admin: list ALL files under backups/ and extract unique folder names
       try{
         const listRes = await fetch(cfg.url+'/storage/v1/object/list/backups',{
           method:'POST',
           headers:{'apikey':cfg.key,'Authorization':'Bearer '+cfg.key,'Content-Type':'application/json'},
-          body: JSON.stringify({limit:100,offset:0,sortBy:{column:'name',order:'asc'}})
+          body: JSON.stringify({limit:200,offset:0,prefix:'',sortBy:{column:'name',order:'asc'}})
         });
         if(listRes.ok){
           const items = await listRes.json();
           if(Array.isArray(items) && items.length){
-            allFolders = items.map(f=>f.name).filter(Boolean);
+            // Items may be folder names OR files — extract unique folder prefixes
+            const folderSet = new Set();
+            items.forEach(f=>{
+              if(!f.name) return;
+              // If name contains / it's a file path like "manila/file.csv"
+              const parts = f.name.split('/');
+              folderSet.add(parts[0]);
+            });
+            allFolders = [...folderSet].filter(Boolean);
           }
         }
       }catch(e){}
