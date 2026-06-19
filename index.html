@@ -2158,6 +2158,10 @@ function canSeeAllBranches(){ return currentRole === 'Owner' || currentRole === 
 function _myBranch(){ return canSeeAllBranches() ? '' : (getBranchName() || 'Main Branch'); }
 // Safe branch for saving records — Owner/Admin records go untagged (visible to all)
 function _saveBranch(){ return canSeeAllBranches() ? '' : (getBranchName() || 'Main Branch'); }
+// Unified branch->slug converter — ensures consistent folder naming everywhere
+function _branchSlug(branchName){
+  return (branchName||'main_branch').toLowerCase().trim().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
+}
 
 function _filterByBranch(records, patientsMap){
   // Owner and Admin see everything
@@ -2793,7 +2797,7 @@ function quickSetupBranches(){
       let created = 0;
 
       for(const branch of branches){
-        const slug = branch.toLowerCase().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
+        const slug = _branchSlug(branch);
         const adminUser = slug + '_admin';
         const staffUser = slug + '_staff';
         if(!accounts[adminUser]){
@@ -5236,7 +5240,7 @@ function exportInventory(){
 // BACKUP — EXPORT & IMPORT
 // ══════════════════════════════════════════════════════════════════════════════
 function exportBackup(){
-  const branch = getBranchName() || 'Main Branch';
+  const branch = _saveBranch() || 'Main Branch';
   const date   = today();
   const pts    = load(KEYS.patients);
   const apts   = load(KEYS.appointments);
@@ -5339,7 +5343,7 @@ async function _uploadBackupToCloud(snapshot){
   const cfg = getSBConfig();
   if(!cfg.url||!cfg.key) return;
   try{
-    const branch   = (snapshot.branch||'main').toLowerCase().replace(/\s+/g,'_');
+    const branch   = _branchSlug(snapshot.branch);
     const filename = branch+'_'+Date.now()+'.csv';
     const path     = 'backups/'+branch+'/'+filename;
     // Build CSV same format as manual exportBackup()
@@ -5442,12 +5446,12 @@ async function showCloudBackups(){
       if(!allFolders.length){
         const accounts = getAllAccounts();
         const branches = [...new Set(Object.values(accounts).filter(a=>a.branch).map(a=>a.branch))];
-        allFolders = branches.map(b=>b.toLowerCase().replace(/\s+/g,'_'));
+        allFolders = branches.map(b=>_branchSlug(b));
         if(!allFolders.includes('main_branch')) allFolders.push('main_branch');
       }
     } else {
       // Branch staff: only their own branch
-      if(myBranch) allFolders = [myBranch.toLowerCase().replace(/\s+/g,'_')];
+      if(myBranch) allFolders = [_branchSlug(myBranch)];
     }
 
     if(!allFolders.length){
@@ -5546,7 +5550,7 @@ async function _restoreCloudBackup(folder, filename){
 
   // Branch restriction check
   if(!canSeeAllBranches()){
-    const mySlug = getBranchName().toLowerCase().replace(/\s+/g,'_');
+    const mySlug = _branchSlug(getBranchName());
     if(folder !== mySlug){ toast('⛔ You can only restore your own branch backups.'); return; }
   }
 
