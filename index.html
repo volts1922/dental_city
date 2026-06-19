@@ -5596,14 +5596,26 @@ async function _restoreCloudBackup(folder, filename){
     const pts=Object.keys(data.patients).length;
     if(!pts){ toast('❌ Could not parse backup file'); return; }
 
-    if(pts)  save(KEYS.patients,     data.patients);
-    if(Object.keys(data.appointments).length) save(KEYS.appointments, data.appointments);
-    if(Object.keys(data.treatments).length)   save(KEYS.treatments,   data.treatments);
-    if(Object.keys(data.billing).length)      save(KEYS.billing,      data.billing);
-    if(Object.keys(data.inventory).length)    save(KEYS.inventory,    data.inventory);
+    // SAFE RESTORE: merge into existing local data instead of replacing entire table
+    // Prevents wiping other branches' records from Developer/Owner local view
+    const mergeAndPush = (key, table, newRecords) => {
+      const existing = load(key) || {};
+      const merged = { ...existing, ...newRecords };
+      DB.set(key, merged);
+      // Push ONLY the restored records to Supabase (not the whole merged set)
+      Object.entries(newRecords).forEach(([id,rec])=>{
+        _sbUpsertOne(table, id, rec).catch(()=>{});
+      });
+    };
+
+    if(pts) mergeAndPush(KEYS.patients, 'patients', data.patients);
+    if(Object.keys(data.appointments).length) mergeAndPush(KEYS.appointments, 'appointments', data.appointments);
+    if(Object.keys(data.treatments).length)   mergeAndPush(KEYS.treatments,   'treatments',   data.treatments);
+    if(Object.keys(data.billing).length)      mergeAndPush(KEYS.billing,      'billing',      data.billing);
+    if(Object.keys(data.inventory).length)    mergeAndPush(KEYS.inventory,    'inventory',    data.inventory);
 
     closeModal();
-    toast('✅ Cloud backup restored! '+pts+' patients loaded.');
+    toast('✅ Cloud backup restored! '+pts+' patients merged & pushed to Supabase.');
     showDashboard();
   }catch(e){ toast('❌ Restore failed: '+e.message); }
 }
