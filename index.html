@@ -5425,23 +5425,19 @@ async function showCloudBackups(){
         const listRes = await fetch(cfg.url+'/storage/v1/object/list/backups',{
           method:'POST',
           headers:{'apikey':cfg.key,'Authorization':'Bearer '+cfg.key,'Content-Type':'application/json'},
-          body: JSON.stringify({limit:200,offset:0,prefix:'',sortBy:{column:'name',order:'asc'}})
+          body: JSON.stringify({limit:200,offset:0,sortBy:{column:'name',order:'asc'}})
         });
-        if(listRes.ok){
-          const items = await listRes.json();
-          if(Array.isArray(items) && items.length){
-            // Items may be folder names OR files — extract unique folder prefixes
-            const folderSet = new Set();
-            items.forEach(f=>{
-              if(!f.name) return;
-              // If name contains / it's a file path like "manila/file.csv"
-              const parts = f.name.split('/');
-              folderSet.add(parts[0]);
-            });
-            allFolders = [...folderSet].filter(Boolean);
-          }
+        const rawItems = await listRes.json();
+        console.log('Storage list status:', listRes.status, 'items:', JSON.stringify(rawItems).substring(0,300));
+        if(listRes.ok && Array.isArray(rawItems) && rawItems.length){
+          const folderSet = new Set();
+          rawItems.forEach(f=>{
+            if(!f.name) return;
+            folderSet.add(f.name.split('/')[0]);
+          });
+          allFolders = [...folderSet].filter(Boolean);
         }
-      }catch(e){}
+      }catch(e){ console.log('Storage list error:', e.message); }
       // Fallback: build from accounts if Storage listing fails
       if(!allFolders.length){
         const accounts = getAllAccounts();
