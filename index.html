@@ -1560,7 +1560,13 @@ function _populateDevBranchSwitcher(){
   wrap.style.display = 'flex';
 
   const accounts = getAllAccounts();
-  const branches = [...new Set(Object.values(accounts).filter(a=>a.branch).map(a=>a.branch))].sort();
+  // Deduplicate by slug — keep the first/most common spelling per slug
+  const slugMap = {};
+  Object.values(accounts).filter(a=>a.branch).forEach(a=>{
+    const slug = _branchSlug(a.branch);
+    if(!slugMap[slug]) slugMap[slug] = a.branch;
+  });
+  const branches = Object.values(slugMap).sort();
 
   sel.innerHTML = '<option value="">🏢 All Branches (Developer)</option>' +
     branches.map(b=>`<option value="${_esc(b)}" ${_devViewBranch===b?'selected':''}>${_esc(b)}</option>`).join('');
@@ -2356,6 +2362,7 @@ function showSettings(){
           <div style="display:flex;gap:8px">
             <button class="btn btn-secondary btn-sm" onclick="showLoginLog()">📋 Login Log</button>
             <button class="btn btn-teal btn-sm" onclick="quickSetupBranches()">⚡ Quick Setup 9 Branches</button>
+            <button class="btn btn-secondary btn-sm" onclick="showMergeBranches()">🔀 Merge Duplicate Branches</button>
             <button class="btn btn-primary btn-sm" onclick="addAccount()">＋ Add Account</button>
           </div>
         </div>
@@ -2631,6 +2638,84 @@ function renderAccountsTable(){
   const body = document.getElementById('accountsTableBody');
   if(body) body.innerHTML = rows || '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--muted)">No accounts yet. Click ＋ Add Account to create one.</td></tr>';
 }
+
+// ── Merge Duplicate Branch Names ──────────────────────────────────────────────
+function showMergeBranches(){
+  const accounts = getAllAccounts();
+  const slugGroups = {};
+  Object.entries(accounts).forEach(([u,a])=>{
+    if(!a.branch) return;
+    const slug = _branchSlug(a.branch);
+    if(!slugGroups[slug]) slugGroups[slug] = new Set();
+    slugGroups[slug].add(a.branch);
+  });
+  const dupes = Object.entries(slugGroups).filter(([slug,names])=>names.size>1);
+
+  if(!dupes.length){
+    openModal('🔀 Merge Duplicate Branches', `
+      <div style="text-align:center;padding:24px;color:var(--muted)">
+        <div style="font-size:32px">✅</div>
+        <div style="margin-top:8px;font-size:13px">No duplicate branch names found!</div>
+      </div>`, null, '✕ Close');
+    return;
+  }
+
+  const rows = dupes.map(([slug,namesSet])=>{
+    const names = [...namesSet];
+    const options = names.map(n=>`<option value="${_esc(n)}">${_esc(n)}</option>`).join('');
+    return `
+      <div style="background:var(--bg);border-radius:10px;padding:14px;margin-bottom:10px;border:1px solid var(--border)">
+        <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px">⚠️ Found ${names.length} variants for: ${names.join(' / ')}</div>
+        <label style="font-size:11px;color:var(--muted)">Keep this spelling (all accounts will be renamed to match):</label>
+        <select id="mergeSelect_${slug}" class="form-control" style="margin-top:4px">${options}</select>
+        <button class="btn btn-primary btn-sm" style="margin-top:8px;width:100%;justify-content:center" onclick="mergeBranchGroup('${slug}')">🔀 Merge to Selected</button>
+      </div>`;
+  }).join('');
+
+  openModal('🔀 Merge Duplicate Branches', `
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">
+      These branch names normalize to the same folder/slug but are spelled differently. Pick the correct spelling for each group.
+    </div>
+    ${rows}
+  `, null, '✕ Close');
+}
+
+async function mergeBranchGroup(slug){
+  const sel = document.getElementById('mergeSelect_'+slug);
+  if(!sel) return;
+  const keepName = sel.value;
+
+  const accounts = getAllAccounts();
+  let changed = 0;
+  Object.entries(accounts).forEach(([u,a])=>{
+    if(a.branch && _branchSlug(a.branch)===slug && a.branch!==keepName){
+      a.branch = keepName;
+      changed++;
+    }
+  });
+
+  if(changed){
+    _saveAccounts(accounts);
+    // Also update patient/appointment/treatment/billing records tagged with old branch names
+    ['patients','appointments','treatments','billing'].forEach(table=>{
+      const data = load(KEYS[table]) || {};
+      let recordsChanged = 0;
+      Object.keys(data).forEach(id=>{
+        if(data[id].branch && _branchSlug(data[id].branch)===slug && data[id].branch!==keepName){
+          data[id].branch = keepName;
+          recordsChanged++;
+        }
+      });
+      if(recordsChanged) save(KEYS[table], data);
+    });
+    toast(`✅ Merged ${changed} account(s) to "${keepName}"`);
+    closeModal();
+    renderAccountsTable();
+  } else {
+    toast('No changes needed');
+  }
+}
+
 
 function addAccount(){
   openModal('＋ Add Branch Account',`
