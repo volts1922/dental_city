@@ -413,6 +413,7 @@ select.form-control{cursor:pointer;}
       <input type="file" accept=".csv" onchange="importBackup(event)" style="display:none">
     </label>
     <button onclick="(isAdmin()||isOwner())&&changePassword()" id="changePwBtn" style="width:100%;padding:7px;background:#374151;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:6px;">🔑 Change Password</button>
+    <button onclick="changeUsername()" style="width:100%;padding:7px;background:#374151;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:6px;">✏️ Change Username</button>
     <div style="border-top:1px solid rgba(255,255,255,0.1);margin:10px 0 8px"></div>
     <button onclick="doLogout()" style="width:100%;padding:10px;background:rgba(220,38,38,0.15);
       color:#FCA5A5;border:1px solid rgba(220,38,38,0.3);border-radius:8px;
@@ -2097,6 +2098,50 @@ function changePassword(){
       toast(`✅ Password changed for ${accounts[u]?.name||u}!`);
     }, '🔑 Change Password'
   );
+}
+
+// ── Change Username ───────────────────────────────────────────────────────────
+async function changeUsername(){
+  const accounts = getAllAccounts();
+  const acc = accounts[_loggedInUser];
+  if(!acc){ toast('❌ Account not found'); return; }
+
+  openModal('✏️ Change Username',`
+    <div style="margin-bottom:12px;font-size:13px;color:var(--muted)">Current username: <b>${_loggedInUser}</b></div>
+    <label style="font-size:12px;font-weight:600;color:var(--navy)">New Username</label>
+    <input id="newUsername" class="form-control" style="margin-top:4px" placeholder="Enter new username" value="${_loggedInUser}">
+    <div id="unameErr" style="color:var(--red);font-size:12px;margin-top:6px;min-height:16px"></div>
+  `, async ()=>{
+    const newName = document.getElementById('newUsername')?.value?.trim().toLowerCase();
+    const err = document.getElementById('unameErr');
+    if(!newName){ err.textContent='Username cannot be empty'; return; }
+    if(newName === _loggedInUser){ err.textContent='Same as current username'; return; }
+    if(accounts[newName]){ err.textContent='Username already taken'; return; }
+    if(!/^[a-z0-9_]+$/.test(newName)){ err.textContent='Only lowercase letters, numbers, underscores'; return; }
+
+    // Copy account to new key, delete old
+    accounts[newName] = { ...acc };
+    delete accounts[_loggedInUser];
+    _saveAccounts(accounts);
+
+    // Move password hash
+    let hashes = {};
+    try{ hashes = JSON.parse(localStorage.getItem(_PW_STORE_KEY)||'{}'); }catch(e){}
+    if(hashes[_loggedInUser]){
+      hashes[newName] = hashes[_loggedInUser];
+      delete hashes[_loggedInUser];
+      localStorage.setItem(_PW_STORE_KEY, JSON.stringify(hashes));
+    }
+
+    // Update Supabase
+    _sbUpsertOne('accounts', newName, accounts[newName]).catch(()=>{});
+    _sbDelete('accounts', _loggedInUser).catch(()=>{});
+
+    _loggedInUser = newName;
+    document.getElementById('userNameLabel').textContent = newName;
+    closeModal();
+    toast('✅ Username changed to: ' + newName);
+  }, '💾 Save');
 }
 
 let _loggedInUser = null; // tracks the username key of the logged-in user
@@ -8208,10 +8253,7 @@ if('serviceWorker' in navigator){
   const _SW_VER = 'dcclinic-v49';
 
   async function _registerSW(){
-    try{
-      const regs = await navigator.serviceWorker.getRegistrations();
-      for(const r of regs) await r.unregister();
-    }catch(e){}
+    // Do NOT unregister — let SW update flow naturally so banner can show
     return navigator.serviceWorker.register('./sw.js?v=49', {updateViaCache:'none'});
   }
 
