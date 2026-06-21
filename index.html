@@ -2237,6 +2237,24 @@ function _filterByBranch(records, patientsMap){
   );
 }
 
+// ── Migration: Ensure all patients have PhilHealth fields (added in v51) ────────
+function _migratePatientPhilHealthFields(){
+  const pts = load(KEYS.patients);
+  let needsSave = false;
+  
+  Object.entries(pts).forEach(([id, p]) => {
+    if(p.philhealth_has === undefined || p.philhealth_member_id === undefined){
+      p.philhealth_has = p.philhealth_has !== undefined ? p.philhealth_has : false;
+      p.philhealth_member_id = p.philhealth_member_id || '';
+      needsSave = true;
+    }
+  });
+  
+  if(needsSave){
+    save(KEYS.patients, pts);
+  }
+}
+
 function _filterPatientsByBranch(patients){
   if(canSeeAllBranches()) return patients;
   const myB = _myBranch();
@@ -3268,6 +3286,8 @@ function _dashSearchPatients(q){
 }
 
 function showDashboard(){
+  // MIGRATION v54.1: Ensure all patients have PhilHealth fields (for old records)
+  _migratePatientPhilHealthFields();
   if(currentRole==='Developer'){ setTimeout(_populateDevBranchSwitcher, 200); _autoCleanupManilaBranch(); }
   // Auto-sync for Owner/Admin so they always see latest data from all branches
   if((currentRole==='Owner'||currentRole==='Admin'||currentRole==='Developer') && !window._dashSyncing){
@@ -3966,6 +3986,9 @@ function addPatient(){
 async function editPatient(id){
   const pts = load(KEYS.patients);
   const p = pts[id];
+  // FIX v54.1: Ensure PhilHealth fields exist (for old patients added before v51)
+  if(p.philhealth_has === undefined) p.philhealth_has = false;
+  if(p.philhealth_member_id === undefined) p.philhealth_member_id = '';
   const photo = _loadPhoto(id);
   if(photo) p.photo = photo;
   openModal('Edit Patient', patientForm(p), async ()=>{
