@@ -3761,6 +3761,51 @@ Ready for submission to PhilHealth`;
   toast('📥 Claim exported as text file');
 }
 
+function exportPhilHealthClaimsCSV() {
+  try {
+    const claims = JSON.parse(localStorage.getItem('dc_philhealth_claims') || '{}');
+    const claimsArray = Object.values(claims);
+    
+    if(claimsArray.length === 0) {
+      toast('⚠️ No claims to export');
+      return;
+    }
+    
+    // Build CSV rows
+    const rows = [
+      ['Claim ID', 'Patient', 'Member ID', 'Bill Amount', 'PhilHealth Covers', 'Patient Pays', 'Status', 'Created Date', 'Branch']
+    ];
+    
+    claimsArray.forEach(c => {
+      rows.push([
+        c.id || '',
+        c.patient_name || '',
+        c.member_id || '',
+        parseFloat(c.total_amount || 0),
+        parseFloat(c.claim_amount || 0),
+        parseFloat(c.patient_share || 0),
+        c.status || 'pending',
+        c.created_date || '',
+        c.branch || ''
+      ]);
+    });
+    
+    // Add summary row
+    const totalBilled = claimsArray.reduce((s, c) => s + parseFloat(c.total_amount || 0), 0);
+    const totalPhilHealth = claimsArray.reduce((s, c) => s + parseFloat(c.claim_amount || 0), 0);
+    const totalPatient = claimsArray.reduce((s, c) => s + parseFloat(c.patient_share || 0), 0);
+    
+    rows.push([]);
+    rows.push(['TOTAL', claimsArray.length + ' claims', '', totalBilled, totalPhilHealth, totalPatient, '', today(), '']);
+    
+    // Download CSV
+    downloadCSV(`philhealth_claims_${today()}.csv`, rows);
+    toast('📥 PhilHealth claims exported to CSV!');
+  } catch(e) {
+    toast('❌ Error exporting: ' + e.message);
+  }
+}
+
 function showPhilHealthClaims() {
   try {
     const claimsStr = localStorage.getItem('dc_philhealth_claims') || '{}';
@@ -3791,6 +3836,9 @@ function showPhilHealthClaims() {
     document.getElementById('main').innerHTML = `
       <div class="section-header">
         <div class="section-title">📋 PhilHealth Claims</div>
+        <div class="btn-row">
+          <button class="btn btn-teal" onclick="exportPhilHealthClaimsCSV()">📥 Export CSV</button>
+        </div>
       </div>
       
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
