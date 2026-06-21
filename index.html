@@ -3381,7 +3381,7 @@ function showDashboard(){
       const isDone = a.status==='Completed'||a.status==='Cancelled'||a.status==='No-show';
       return `<tr>
         <td>${id}</td>
-        <td><b>${pname}</b>${branchBadge(branch)}</td>
+        <td><b onclick="showPatientHistory('${a.patient_id}')" style="cursor:pointer;color:var(--blue);transition:all 0.2s;transform:scale(1)" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">${pname}</b>${branchBadge(branch)}</td>
         <td>${cleanTime(a.time)||'—'}</td>
         <td>${a.type||'—'}</td>
         <td>${_esc(a.dentist||'—')}</td>
@@ -3850,7 +3850,7 @@ function showPhilHealthClaims() {
     
     const rows = claimsArray.map(claim => `<tr>
       <td style="font-size:11px">${claim.id}</td>
-      <td>${_esc(claim.patient_name)}</td>
+      <td><b onclick="showPatientHistory('${claim.patient_id}')" style="cursor:pointer;color:var(--blue)">${_esc(claim.patient_name)}</b></td>
       <td style="font-weight:700;color:var(--green)">₱${parseFloat(claim.claim_amount).toLocaleString()}</td>
       <td><select onchange="updateClaimStatus('${claim.id}', this.value)" style="padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px">
         <option value="pending" ${claim.status==='pending'?'selected':''}>Pending</option>
@@ -4296,7 +4296,7 @@ function showAppointments(filters={}){
     const isToday = cleanDate(a.date)===td;
     return `<tr${isToday?' style="background:#FFFBEB"':''}>
       <td>${id}</td>
-      <td><b>${pname}</b></td>
+      <td><b onclick="showPatientHistory('${a.patient_id}')" style="cursor:pointer;color:var(--blue);transition:all 0.2s;transform:scale(1)" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">${pname}</b></td>
       <td>${branchBadge(branch)||'<span style="color:var(--muted)">—</span>'}</td>
       <td>${isToday?`<b style="color:var(--green)">${cleanDate(a.date)} 📅</b>`:cleanDate(a.date)||'—'}</td>
       <td>${cleanTime(a.time)||'—'}</td>
@@ -4461,7 +4461,7 @@ function filterTxTable(q=''){
       const pname = p.name || t.patient_name || '—';
       const branch= _getBranch(t, p) || t.branch || p.branch || '—';
       return `<tr>
-        <td>${id}</td><td><b>${pname}</b></td><td>${branchBadge(branch)||'<span style="color:var(--muted)">—</span>'}</td><td>${cleanDate(t.date)}</td>
+        <td>${id}</td><td><b onclick="showPatientHistory('${t.patient_id}')" style="cursor:pointer;color:var(--blue);transition:all 0.2s;transform:scale(1)" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">${pname}</b></td><td>${branchBadge(branch)||'<span style="color:var(--muted)">—</span>'}</td><td>${cleanDate(t.date)}</td>
         <td>${t.procedure||'—'}</td><td>${t.tooth||'—'}</td>
         <td>${t.dentist||'—'}</td><td>${fmt(t.cost)}</td>
         <td>
@@ -4692,7 +4692,7 @@ function showBilling(q=''){
       const paid   = parseFloat(b.paid||0);
       return `<tr>
         <td>${id}</td>
-        <td><b>${pname}</b>${branchBadge(branch)}</td>
+        <td><b onclick="showPatientHistory('${b.patient_id}')" style="cursor:pointer;color:var(--blue);transition:all 0.2s;transform:scale(1)" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">${pname}</b>${branchBadge(branch)}</td>
         <td>${cleanDate(b.date)}</td>
         <td>${b.services||'—'}</td><td>${fmt(amt)}${b.discount_type?`<br><span style="font-size:10px;color:var(--green);font-weight:700">${b.discount_type==='senior'?'👴SC':b.discount_type==='pwd'?'♿PWD':b.hmo_provider||'HMO'} -${b.discount_pct||0}%</span>`:''}</td>
         <td>${fmt(paid)}</td><td>${fmt((parseFloat(b.discounted_amount||amt))-paid)}</td>
@@ -5702,7 +5702,7 @@ function exportBillingCSV(){
     ['DENTAL CLINIC — BILLING REPORT'],
     ['Branch:', branch, 'Exported:', new Date().toLocaleString('en-PH')],
     [],
-    ['ID','Patient','Date','Services','Amount (₱)','Paid (₱)','Balance (₱)','Payment Method','Status','Branch']
+    ['ID','Patient','Date','Services','Amount (₱)','Paid (₱)','Balance (₱)','Payment Method','Status','PhilHealth','PH Covers (₱)','Patient Share (₱)','Branch']
   ];
   Object.entries(bil)
     .sort((a,b)=>cleanDate(b[1].date).localeCompare(cleanDate(a[1].date)))
@@ -5711,7 +5711,8 @@ function exportBillingCSV(){
       const paid = parseFloat(b.paid||0);
       totalAmt  += amt; totalPaid += paid;
       rows.push([id,pName(b,allPts),cleanDate(b.date),b.services||'',
-        amt,paid,amt-paid,b.payment_method||'',b.status||'',b.branch||'']);
+        amt,paid,amt-paid,b.payment_method||'',b.status||'',
+        b.philhealth_eligible?'Yes':'No',b.philhealth_covers||0,b.philhealth_patient||0,b.branch||'']);
     });
   rows.push([]);
   rows.push(['','','','TOTALS:',totalAmt,totalPaid,totalAmt-totalPaid]);
@@ -5754,6 +5755,7 @@ function exportBackup(){
   const txs    = load(KEYS.treatments);
   const bil    = load(KEYS.billing);
   const inv    = load(KEYS.inventory);
+  const claims = load(KEYS.philhealthClaims);
 
   const rows = [
     ['DENTAL CLINIC SYSTEM — FULL BACKUP'],
@@ -5762,11 +5764,12 @@ function exportBackup(){
      'Appointments:', Object.keys(apts).length, 'Bills:', Object.keys(bil).length],
     [],
     ['=== PATIENTS ==='],
-    ['ID','Name','Age','Gender','Contact','Email','Address','Medical History','Allergies','Branch'],
+    ['ID','Name','Age','Gender','Contact','Email','Address','Medical History','Allergies','PhilHealth','Member ID','Branch'],
   ];
   Object.entries(pts).forEach(([id,p])=>{
     rows.push([id,p.name||'',p.age||'',p.gender||'',p.contact||'',
-      p.email||'',p.address||'',p.medical_history||'',p.allergies||'',p.branch||'']);
+      p.email||'',p.address||'',p.medical_history||'',p.allergies||'',
+      p.philhealth_has?'Yes':'No',p.philhealth_member_id||'',p.branch||'']);
   });
 
   rows.push([], ['=== APPOINTMENTS ==='],
@@ -5786,13 +5789,21 @@ function exportBackup(){
   });
 
   rows.push([], ['=== BILLING ==='],
-    ['ID','Patient ID','Patient Name','Date','Services','Amount','Paid','Balance','Method','Status','Branch']);
+    ['ID','Patient ID','Patient Name','Date','Services','Amount','Paid','Balance','Method','Status','PhilHealth','PH Covers','Patient Share','Branch']);
   Object.entries(bil).forEach(([id,b])=>{
     const p   = pts[b.patient_id]||{};
     const amt = parseFloat(b.amount||0);
     const paid= parseFloat(b.paid||0);
     rows.push([id,b.patient_id||'',pName(b,pts),cleanDate(b.date),
-      b.services||'',amt,paid,amt-paid,b.payment_method||'',b.status||'',b.branch||'']);
+      b.services||'',amt,paid,amt-paid,b.payment_method||'',b.status||'',
+      b.philhealth_eligible?'Yes':'No',b.philhealth_covers||0,b.philhealth_patient||0,b.branch||'']);
+  });
+
+  rows.push([], ['=== PHILHEALTH CLAIMS ==='],
+    ['Claim ID','Patient','Member ID','Bill Amount','PH Covers','Patient Pays','Status','Created','Branch']);
+  Object.entries(claims).forEach(([id,c])=>{
+    rows.push([id,c.patient_name||'',c.member_id||'',c.total_amount||0,
+      c.claim_amount||0,c.patient_share||0,c.status||'',c.created_date||'',c.branch||'']);
   });
 
   rows.push([], ['=== INVENTORY ==='],
@@ -5807,7 +5818,7 @@ function exportBackup(){
   downloadCSV(`dental_backup_${branch}_${date}.csv`, rows);
   toast('💾 Backup exported as CSV!');
   // Also upload to Supabase Storage silently
-  const _snap = { branch, time: new Date().toLocaleString('en-PH'), data:{ patients:pts, appointments:apts, treatments:txs, billing:bil, inventory:inv } };
+  const _snap = { branch, time: new Date().toLocaleString('en-PH'), data:{ patients:pts, appointments:apts, treatments:txs, billing:bil, inventory:inv, philhealth_claims:claims } };
   _uploadBackupToCloud(_snap).catch(()=>{});
 }
 

@@ -1,5 +1,5 @@
 // ── Dental City Clinic — Service Worker ──────────────────────────────────────
-const CACHE_VERSION = 'dcclinic-v55'; // PhilHealth: cloud sync fix (claims table + schema whitelist + branch filter)
+const CACHE_VERSION = 'dcclinic-v55.2'; // Clickable patient names in appointments/treatments/billing/claims
 const ASSETS = [
   './',
   './index.html',
