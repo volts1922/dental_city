@@ -1612,6 +1612,7 @@ function changeBranchName(){
       setBranchName(name);
       updateBranchBadge(name);
       closeModal();
+      if(canSeeAllBranches()){ syncFromCloud().then(() => showDashboard()); }
       toast(`✅ Branch name updated to "${name}"!`);
     }, '✅ Save'
   );
@@ -3691,6 +3692,8 @@ function addPatient(){
 async function editPatient(id){
   const pts = load(KEYS.patients);
   const p = pts[id];
+  const photo = _loadPhoto(id);
+  if(photo) p.photo = photo;
   openModal('Edit Patient', patientForm(p), async ()=>{
     if(!fval('name')){ toast('Name is required'); return; }
     if(!(await _checkCloudVersion('patients', id, p))) return;
@@ -4296,8 +4299,18 @@ function renderChart(){
     return teeth.map(t=>{
       const cond  = (chart[t]||{}).condition || 'Healthy';
       const color = COND_COLORS[cond] || COND_COLORS.Healthy;
-      return `<div class="tooth-btn" style="background:${color}" onclick="editTooth(${t})" title="Tooth ${t}: ${cond}">
-        <span style="font-size:8px;opacity:.8">${t}</span>
+      return `<div class="tooth-svg-wrapper" onclick="editTooth(${t})" style="cursor:pointer;position:relative" title="Tooth ${t}: ${cond}">
+        <svg width="44" height="56" viewBox="0 0 44 56" xmlns="http://www.w3.org/2000/svg" style="filter:drop-shadow(0 2px 4px rgba(0,0,0,0.15))">
+          <!-- Tooth root -->
+          <path d="M 12 32 Q 10 42 14 50 L 30 50 Q 34 42 32 32 Z" fill="${color}" opacity="0.4" stroke="${color}" stroke-width="1"/>
+          <!-- Tooth crown -->
+          <path d="M 12 32 Q 11 16 12 8 Q 14 2 22 2 Q 30 2 32 8 Q 33 16 32 32 Z" fill="${color}" stroke="${color}" stroke-width="1.5"/>
+          <!-- Tooth shine -->
+          <ellipse cx="18" cy="12" rx="4" ry="6" fill="#fff" opacity="0.35"/>
+          <!-- Condition indicator dot -->
+          <circle cx="36" cy="6" r="4" fill="${color}" stroke="#fff" stroke-width="1"/>
+        </svg>
+        <div style="font-size:9px;font-weight:600;color:var(--text);margin-top:2px;text-align:center">${t}</div>
       </div>`;
     }).join('');
   }
@@ -7176,6 +7189,8 @@ function showPatientHistory(pid){
   const txs  = load(KEYS.treatments);
   const bil  = load(KEYS.billing);
   const p    = pts[pid] || {};
+  const photo = _loadPhoto(pid);
+  if(photo) p.photo = photo;
 
   // Get all records for this patient
   const patApts = Object.entries(apts)
@@ -8277,6 +8292,8 @@ function printPatientCard(id){
   const txs  = load(KEYS.treatments);
   const p    = pts[id];
   if(!p){ toast('❌ Patient not found'); return; }
+  const photo = _loadPhoto(id);
+  if(photo) p.photo = photo;
 
   // Match by patient_id OR patient_name (for records synced from Google Sheets)
   const patName = p.name||'';
@@ -9522,9 +9539,9 @@ async function _clearChat(){
 
 
 // ── Photo storage — kept separate from patient records to avoid localStorage quota ──
-function _savePhoto(pid, data){ try{ localStorage.setItem('dc_photo_'+pid, data||''); }catch(e){} }
-function _loadPhoto(pid){ try{ return localStorage.getItem('dc_photo_'+pid)||''; }catch(e){ return ''; } }
-function _deletePhoto(pid){ try{ localStorage.removeItem('dc_photo_'+pid); }catch(e){} }
+function _savePhoto(pid, data){ try{ const k=`dc_photo_${_saveBranch()||'default'}_${pid}`; localStorage.setItem(k, data||''); }catch(e){} }
+function _loadPhoto(pid){ try{ const k=`dc_photo_${_saveBranch()||'default'}_${pid}`; return localStorage.getItem(k)||''; }catch(e){ return ''; } }
+function _deletePhoto(pid){ try{ const k=`dc_photo_${_saveBranch()||'default'}_${pid}`; localStorage.removeItem(k); }catch(e){} }
 function _esc(t){ const d=document.createElement('div'); d.textContent=t; return d.innerHTML; }
 function _renderChat(){
   const me = _loggedInUser||'owner';
