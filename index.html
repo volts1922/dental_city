@@ -3013,6 +3013,7 @@ const _NAV_BASE = [
   {icon:'📦', label:'Inventory',       fn:'showInventory'},
   {icon:'📷', label:'QR Scanner',      fn:'showQRScanner'},
   {icon:'📈', label:'Reports',         fn:'showReports'},
+  {icon:'📋', label:'PhilHealth',      fn:'showPhilHealthClaims'},
 ];
 const NAV_OWNER = [..._NAV_BASE,
   {icon:'🏢', label:'Multi-Branch',    fn:'showMultiBranch'},
@@ -3543,6 +3544,17 @@ function patientForm(d={}){
     ${formRow('Medical History','medical_history',d.medical_history)}
     ${formRow('Allergies','allergies',d.allergies)}
     ${formRow('Gender','gender',d.gender||'Male',null,['Male','Female','Other'])}
+    
+    <!-- PhilHealth Insurance Section (MVP) -->
+    <div style="background:#E0F2FE;border-left:4px solid #0284C7;padding:12px;border-radius:6px;margin-top:12px">
+      <label class="form-label" style="color:#0C4A6E">🏥 PhilHealth Insurance</label>
+      <div style="display:flex;gap:12px;align-items:center;margin-top:8px">
+        <input type="checkbox" id="f_ph_has" ${d.philhealth_has?'checked':''} style="cursor:pointer;width:18px;height:18px">
+        <label for="f_ph_has" style="cursor:pointer;margin:0;font-size:13px">Has PhilHealth Insurance</label>
+      </div>
+      <input class="form-control" id="f_ph_member_id" placeholder="Member ID (12-0123456789-0)" value="${d.philhealth_member_id||''}" style="margin-top:8px;font-size:13px">
+    </div>
+    
     <div class="form-group">
       <label class="form-label">Patient Photo</label>
       <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
@@ -3603,6 +3615,167 @@ function removePhoto(){
   document.getElementById('photoBox').innerHTML =
     '<span style="font-size:32px;color:var(--muted)">👤</span>';
   document.getElementById('f_photo_file').value = '';
+}
+
+// ── PhilHealth MVP Helpers ────────────────────────────────────────────────────
+function calculatePhilHealthShare(){
+  const isChecked = document.getElementById('f_ph_eligible')?.checked;
+  const calcDiv = document.getElementById('ph_calc');
+  if(!calcDiv) return;
+  
+  calcDiv.style.display = isChecked ? 'block' : 'none';
+  
+  if(isChecked){
+    const amount = parseFloat(document.getElementById('f_amount')?.value || 0);
+    const covers = Math.round(amount * 0.71);
+    const patient = Math.round(amount * 0.29);
+    
+    document.getElementById('ph_cost').textContent = '₱' + amount.toLocaleString();
+    document.getElementById('ph_covers').textContent = '₱' + covers.toLocaleString();
+    document.getElementById('ph_patient').textContent = '₱' + patient.toLocaleString();
+    
+    document.getElementById('f_ph_covers').value = covers;
+    document.getElementById('f_ph_patient').value = patient;
+  }
+}
+
+function generatePhilHealthClaim(billingId) {
+  const billing = load(KEYS.billing)[billingId];
+  if (!billing) { toast('❌ Billing not found'); return; }
+  
+  const patient = load(KEYS.patients)[billing.patient_id];
+  if (!patient || !patient.philhealth_has) {
+    toast('⚠️ Patient not PhilHealth eligible'); return;
+  }
+  
+  if (!patient.philhealth_member_id) {
+    toast('⚠️ PhilHealth member ID not on file'); return;
+  }
+  
+  const claim = {
+    id: 'ph_' + Date.now(),
+    billing_id: billingId,
+    patient_id: billing.patient_id,
+    patient_name: patient.name,
+    member_id: patient.philhealth_member_id,
+    claim_amount: Math.round(parseFloat(billing.amount || 0) * 0.71),
+    total_amount: parseFloat(billing.amount || 0),
+    patient_share: Math.round(parseFloat(billing.amount || 0) * 0.29),
+    status: 'pending',
+    created_date: today(),
+    branch: _saveBranch() || 'Main Branch'
+  };
+  
+  let claims = JSON.parse(localStorage.getItem('dc_philhealth_claims') || '{}');
+  claims[claim.id] = claim;
+  localStorage.setItem('dc_philhealth_claims', JSON.stringify(claims));
+  
+  toast('✅ PhilHealth claim created! ID: ' + claim.id);
+  return claim;
+}
+
+function updateClaimStatus(claimId, newStatus) {
+  let claims = JSON.parse(localStorage.getItem('dc_philhealth_claims') || '{}');
+  if (claims[claimId]) {
+    claims[claimId].status = newStatus;
+    localStorage.setItem('dc_philhealth_claims', JSON.stringify(claims));
+    toast('✅ Claim updated to: ' + newStatus);
+    showPhilHealthClaims();
+  }
+}
+
+function exportClaimText(claimId) {
+  const claims = JSON.parse(localStorage.getItem('dc_philhealth_claims') || '{}');
+  const claim = claims[claimId];
+  if(!claim) { toast('❌ Claim not found'); return; }
+  
+  const text = `DENTAL CITY CLINIC
+PhilHealth Claim Form
+
+Claim ID: ${claim.id}
+Date: ${today()}
+
+PATIENT INFORMATION:
+Name: ${claim.patient_name}
+PhilHealth Member ID: ${claim.member_id}
+
+CLAIM DETAILS:
+Treatment Cost: ₱${parseFloat(claim.total_amount).toLocaleString()}
+PhilHealth Coverage (71%): ₱${parseFloat(claim.claim_amount).toLocaleString()}
+Patient Responsibility: ₱${parseFloat(claim.patient_share).toLocaleString()}
+
+Status: ${claim.status}
+Branch: ${claim.branch}
+
+---
+Ready for submission to PhilHealth`;
+  
+  const element = document.createElement('a');
+  element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+  element.setAttribute('download', `claim_${claimId}.txt`);
+  element.style.display = 'none';
+  document.body.appendChild(element);
+  element.click();
+  document.body.removeChild(element);
+  
+  toast('📥 Claim exported as text file');
+}
+
+function showPhilHealthClaims() {
+  const claims = JSON.parse(localStorage.getItem('dc_philhealth_claims') || '{}');
+  const claimsArray = Object.values(claims).sort((a,b) => 
+    (b.created_date || '').localeCompare(a.created_date || '')
+  );
+  
+  const pendingCount = claimsArray.filter(c=>c.status==='pending').length;
+  const approvedCount = claimsArray.filter(c=>c.status==='approved').length;
+  const paidCount = claimsArray.filter(c=>c.status==='paid').length;
+  const rejectedCount = claimsArray.filter(c=>c.status==='rejected').length;
+  
+  const rows = claimsArray.map(claim => `<tr>
+    <td style="font-size:11px">${claim.id}</td>
+    <td>${_esc(claim.patient_name)}</td>
+    <td style="font-weight:700;color:var(--green)">₱${parseFloat(claim.claim_amount).toLocaleString()}</td>
+    <td><select onchange="updateClaimStatus('${claim.id}', this.value)" style="padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px">
+      <option value="pending" ${claim.status==='pending'?'selected':''}>Pending</option>
+      <option value="approved" ${claim.status==='approved'?'selected':''}>Approved</option>
+      <option value="paid" ${claim.status==='paid'?'selected':''}>Paid</option>
+      <option value="rejected" ${claim.status==='rejected'?'selected':''}>Rejected</option>
+    </select></td>
+    <td style="font-size:11px">${claim.created_date}</td>
+    <td><button class="btn btn-sm" style="background:#2563EB;color:#fff" onclick="exportClaimText('${claim.id}')">📥 Export</button></td>
+  </tr>`).join('');
+  
+  document.getElementById('main').innerHTML = `
+    <div class="section-header">
+      <div class="section-title">📋 PhilHealth Claims</div>
+    </div>
+    
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
+      <div style="background:#FEF3C7;padding:12px;border-radius:8px;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:#F59E0B">${pendingCount}</div>
+        <div style="font-size:11px;color:#92400E">Pending</div>
+      </div>
+      <div style="background:#DBEAFE;padding:12px;border-radius:8px;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:#3B82F6">${approvedCount}</div>
+        <div style="font-size:11px;color:#1E40AF">Approved</div>
+      </div>
+      <div style="background:#DCFCE7;padding:12px;border-radius:8px;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:#10B981">${paidCount}</div>
+        <div style="font-size:11px;color:#065F46">Paid</div>
+      </div>
+      <div style="background:#FEE2E2;padding:12px;border-radius:8px;text-align:center">
+        <div style="font-size:20px;font-weight:700;color:#EF4444">${rejectedCount}</div>
+        <div style="font-size:11px;color:#7F1D1D">Rejected</div>
+      </div>
+    </div>
+    
+    <div class="table-wrap"><div class="table-scroll">
+      <table><thead><tr>
+        <th>Claim ID</th><th>Patient</th><th>Amount</th><th>Status</th><th>Created</th><th>Action</th>
+      </tr></thead><tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">No claims yet</td></tr>'}</tbody></table>
+    </div></div>
+  `;
 }
 
 // ── Auto-CSV: called every time patients are saved ────────────────────────────
@@ -3678,6 +3851,8 @@ function addPatient(){
     pts[id] = {name:fval('name'),age:fval('age'),contact:fval('contact'),
       email:fval('email'),address:fval('address'),medical_history:fval('medical_history'),
       allergies:fval('allergies'),gender:fval('gender'),
+      philhealth_has: document.getElementById('f_ph_has')?.checked || false,
+      philhealth_member_id: document.getElementById('f_ph_member_id')?.value || '',
       branch: _saveBranch() || 'Main Branch'};
     save(KEYS.patients, pts, id);
     closeModal();
@@ -3699,6 +3874,8 @@ async function editPatient(id){
     pts[id] = {...p, name:fval('name'),age:fval('age'),contact:fval('contact'),
       email:fval('email'),address:fval('address'),medical_history:fval('medical_history'),
       allergies:fval('allergies'),gender:fval('gender'),
+      philhealth_has: document.getElementById('f_ph_has')?.checked || false,
+      philhealth_member_id: document.getElementById('f_ph_member_id')?.value || '',
       branch: p.branch || _saveBranch() || 'Main Branch',
       updated_at: new Date().toISOString()};
     save(KEYS.patients, pts, id);
@@ -4409,6 +4586,7 @@ function showBilling(q=''){
           <button class="btn btn-danger btn-sm" onclick="deleteBill('${id}')">🗑</button>
           <button class="btn btn-sm" style="background:#6366F1;color:#fff" onclick="printReceipt('${id}')">🖨</button>
           <button class="btn btn-sm" style="background:#0891B2;color:#fff" onclick="printInvoice('${id}')">📄</button>
+          <button class="btn btn-sm" style="background:#10B981;color:#fff" onclick="generatePhilHealthClaim('${id}')">📋 PhilHealth</button>
         </td>
       </tr>`;
     }).join('') || `<tr><td colspan="9"><div class="empty"><div class="empty-icon">💰</div><p>${ql?'No results found':'No bills yet'}</p></div></td></tr>`;
@@ -4453,6 +4631,32 @@ function billForm(d={}){
       <div style="font-size:11px;color:var(--muted);margin-top:4px">💡 Select a patient to see their recent appointments</div>
     </div>
     ${formRow('Total Amount (₱)','amount',d.amount||'0','number')}
+    
+    <!-- PhilHealth Coverage Calculator (MVP) -->
+    <div style="background:#F0FDF4;border-left:4px solid #16A34A;padding:12px;border-radius:6px;margin-top:12px">
+      <label class="form-label" style="color:#15803D">💚 PhilHealth Coverage</label>
+      <div style="display:flex;gap:12px;align-items:center;margin-top:8px">
+        <input type="checkbox" id="f_ph_eligible" ${d.philhealth_eligible?'checked':''} onchange="calculatePhilHealthShare()" style="cursor:pointer;width:18px;height:18px">
+        <label for="f_ph_eligible" style="cursor:pointer;margin:0;font-size:13px">Covered by PhilHealth</label>
+      </div>
+      <div id="ph_calc" style="margin-top:12px;display:${d.philhealth_eligible?'block':'none'};background:#fff;padding:10px;border-radius:6px;border:1px solid #BBFBEE">
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px">
+          <span>Treatment Cost:</span>
+          <span id="ph_cost">₱0</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:6px;color:#16A34A;font-weight:700">
+          <span>PhilHealth Covers (71%):</span>
+          <span id="ph_covers">₱0</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;padding-top:6px;border-top:1px solid #E5E7EB;font-weight:700;color:#059669">
+          <span>Patient Pays:</span>
+          <span id="ph_patient">₱0</span>
+        </div>
+      </div>
+      <input type="hidden" id="f_ph_covers" value="">
+      <input type="hidden" id="f_ph_patient" value="">
+    </div>
+    
     <div class="form-group">
       <label class="form-label">Discount / HMO Coverage</label>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
@@ -4559,10 +4763,18 @@ function addBill(){
       hmo_provider:hmoProvider,hmo_card:hmoCard,
       paid:fval('paid'),payment_method:fval('payment_method'),
       notes:fval('notes'), status: paid>=parseFloat(fval('discounted_amount')||amt)?'Paid': paid>0?'Partial':'Unpaid',
-      branch: _saveBranch() || 'Main Branch'};
+      branch: _saveBranch() || 'Main Branch',
+      philhealth_eligible: document.getElementById('f_ph_eligible')?.checked || false,
+      philhealth_covers: document.getElementById('f_ph_covers')?.value || 0,
+      philhealth_patient: document.getElementById('f_ph_patient')?.value || 0};
     save(KEYS.billing, bil, id);
     closeModal(); toast('✅ Bill saved!'); showBilling();
   });
+  // Attach amount change listener after modal renders
+  setTimeout(()=>{
+    const amtField = document.getElementById('f_amount');
+    if(amtField) amtField.addEventListener('change', calculatePhilHealthShare);
+  }, 100);
 }
 
 async function editBill(id){
@@ -4579,12 +4791,15 @@ async function editBill(id){
       hmo_provider:fval('hmo_provider')||'',hmo_card:fval('hmo_card')||'',
       paid:fval('paid'),payment_method:fval('payment_method'),
       notes:fval('notes'), status: paid>=parseFloat(fval('discounted_amount')||amt)?'Paid': paid>0?'Partial':'Unpaid',
-      updated_at:new Date().toISOString()};
+      updated_at:new Date().toISOString(),
+      philhealth_eligible: document.getElementById('f_ph_eligible')?.checked || false,
+      philhealth_covers: document.getElementById('f_ph_covers')?.value || 0,
+      philhealth_patient: document.getElementById('f_ph_patient')?.value || 0};
     save(KEYS.billing, bil, id);
     closeModal(); toast('✅ Bill updated!'); showBilling();
   });
   // Show appointment suggestions for the existing patient
-  setTimeout(()=>{ billAutoFillServices(bil[id]?.patient_id); applyBillDiscount(); }, 150);
+  setTimeout(()=>{ billAutoFillServices(bil[id]?.patient_id); applyBillDiscount(); calculatePhilHealthShare(); }, 150);
 }
 
 function markPaid(id){
