@@ -1,5 +1,5 @@
 // ── Dental City Clinic — Service Worker ──────────────────────────────────────
-const CACHE_VERSION = 'dcclinic-v55.2'; // Clickable patient names in appointments/treatments/billing/claims
+const CACHE_VERSION = 'dcclinic-v55.3'; // Clickable names in Multi-Branch tabs (patients/appointments/billing)
 const ASSETS = [
   './',
   './index.html',

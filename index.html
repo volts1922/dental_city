@@ -7178,7 +7178,7 @@ function showBranchTab(tab, btn){
       const color = branchColor[Object.keys(branchMap).indexOf(bname) % branchColor.length];
       return Object.entries(b.patients).map(([pid,p])=>`<tr>
         <td><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;background:${color}22;color:${color}">${bname}</span></td>
-        <td>${pid}</td><td><b>${_esc(p.name||'—')}</b></td>
+        <td>${pid}</td><td><b onclick="showPatientHistory('${pid}')" style="cursor:pointer;color:var(--blue)">${_esc(p.name||'—')}</b></td>
         <td>${p.age||'—'}</td><td>${p.gender||'—'}</td>
         <td>${p.contact||'—'}</td>
       </tr>`);
@@ -7198,7 +7198,7 @@ function showBranchTab(tab, btn){
           const pname = pName(a, pts);
           return `<tr>
             <td><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;background:${color}22;color:${color}">${bname}</span></td>
-            <td>${aid}</td><td><b>${pname}</b></td>
+            <td>${aid}</td><td><b onclick="showPatientHistory('${a.patient_id}')" style="cursor:pointer;color:var(--blue)">${pname}</b></td>
             <td>${a.date||'—'}</td><td>${a.time||'—'}</td>
             <td>${a.type||'—'}</td><td>${badgeHtml(a.status||'Scheduled')}</td>
           </tr>`;
@@ -7223,7 +7223,7 @@ function showBranchTab(tab, btn){
           grandTotal += amt; grandPaid += paid;
           return `<tr>
             <td><span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;background:${color}22;color:${color}">${bname}</span></td>
-            <td>${bid}</td><td><b>${pname}</b></td>
+            <td>${bid}</td><td><b onclick="showPatientHistory('${bill.patient_id}')" style="cursor:pointer;color:var(--blue)">${pname}</b></td>
             <td>${bill.date||'—'}</td><td>${bill.services||'—'}</td>
             <td>${fmt(amt)}</td><td>${fmt(paid)}</td>
             <td>${badgeHtml(bill.status||'Unpaid')}</td>
