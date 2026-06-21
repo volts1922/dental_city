@@ -3518,13 +3518,12 @@ function filterPatientsTable(q=''){
       const branch = _getBranch(p, null);
       return `<tr>
         <td>${id}</td>
-        <td style="cursor:pointer" onclick="showPatientHistory('${id}')"><b style="color:var(--blue);text-decoration:underline">${_esc(p.name||'')}</b>${branchBadge(branch)}</td>
+        <td style="cursor:pointer" onclick="showPatientHistory('${id}')"><b style="color:var(--blue);transition:all 0.2s;transform:scale(1)" onmouseover="this.style.transform='scale(1.05)';this.style.color='#0284C7'" onmouseout="this.style.transform='scale(1)';this.style.color='var(--blue)'">${_esc(p.name||'')}</b>${branchBadge(branch)}</td>
         <td>${p.age||'—'}</td>
         <td>${p.gender||'—'}</td><td>${p.contact||'—'}</td><td>${last}</td>
         <td>
           <button class="btn btn-secondary btn-sm" onclick="editPatient('${id}')">✏ Edit</button>
           <button class="btn btn-danger btn-sm" onclick="deletePatient('${id}')">🗑 Delete</button>
-          <button class="btn btn-sm" style="background:#16A34A;color:#fff" onclick="showPatientHistory('${id}')">📋 History</button>
           <button class="btn btn-sm" style="background:#7C3AED;color:#fff" onclick="showPatientQR('${id}')">📷 QR</button>
           <button class="btn btn-sm" style="background:#0891B2;color:#fff" onclick="printPatientCard('${id}')">🖨 Card</button>
         </td>
