@@ -3518,7 +3518,7 @@ function filterPatientsTable(q=''){
       const branch = _getBranch(p, null);
       return `<tr>
         <td>${id}</td>
-        <td><b>${_esc(p.name||'')}</b>${branchBadge(branch)}</td>
+        <td style="cursor:pointer" onclick="showPatientHistory('${id}')"><b style="color:var(--blue);text-decoration:underline">${_esc(p.name||'')}</b>${branchBadge(branch)}</td>
         <td>${p.age||'—'}</td>
         <td>${p.gender||'—'}</td><td>${p.contact||'—'}</td><td>${last}</td>
         <td>
