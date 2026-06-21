@@ -3628,7 +3628,7 @@ function calculatePhilHealthShare(){
   if(isChecked){
     const amount = parseFloat(document.getElementById('f_amount')?.value || 0);
     const covers = Math.round(amount * 0.71);
-    const patient = Math.round(amount * 0.29);
+    const patient = amount - covers;  // FIX #2: Ensures exact total
     
     document.getElementById('ph_cost').textContent = '₱' + amount.toLocaleString();
     document.getElementById('ph_covers').textContent = '₱' + covers.toLocaleString();
@@ -3652,35 +3652,75 @@ function generatePhilHealthClaim(billingId) {
     toast('⚠️ PhilHealth member ID not on file'); return;
   }
   
-  const claim = {
-    id: 'ph_' + Date.now(),
-    billing_id: billingId,
-    patient_id: billing.patient_id,
-    patient_name: patient.name,
-    member_id: patient.philhealth_member_id,
-    claim_amount: Math.round(parseFloat(billing.amount || 0) * 0.71),
-    total_amount: parseFloat(billing.amount || 0),
-    patient_share: Math.round(parseFloat(billing.amount || 0) * 0.29),
-    status: 'pending',
-    created_date: today(),
-    branch: _saveBranch() || 'Main Branch'
-  };
-  
-  let claims = JSON.parse(localStorage.getItem('dc_philhealth_claims') || '{}');
-  claims[claim.id] = claim;
-  localStorage.setItem('dc_philhealth_claims', JSON.stringify(claims));
-  
-  toast('✅ PhilHealth claim created! ID: ' + claim.id);
-  return claim;
+  try {
+    // FIX #1: Check for existing claim (prevent duplicates)
+    let claims = JSON.parse(localStorage.getItem('dc_philhealth_claims') || '{}');
+    const existingClaim = Object.values(claims).find(c => c.billing_id === billingId);
+    if(existingClaim) {
+      toast('⚠️ Claim already exists for this bill: ' + existingClaim.id);
+      return existingClaim;
+    }
+    
+    // FIX #2: Fix math rounding - ensure exact total
+    const amount = parseFloat(billing.amount || 0);
+    const covers = Math.round(amount * 0.71);
+    const patient_share = amount - covers;  // Ensures exact total
+    
+    const claim = {
+      id: 'ph_' + Date.now(),
+      billing_id: billingId,
+      patient_id: billing.patient_id,
+      patient_name: patient.name,
+      member_id: patient.philhealth_member_id,
+      claim_amount: covers,
+      total_amount: amount,
+      patient_share: patient_share,
+      status: 'pending',
+      created_date: today(),
+      branch: _saveBranch() || 'Main Branch'
+    };
+    
+    claims[claim.id] = claim;
+    localStorage.setItem('dc_philhealth_claims', JSON.stringify(claims));
+    
+    toast('✅ PhilHealth claim created! ID: ' + claim.id);
+    return claim;
+  } catch(e) {
+    // FIX #3: Error handling for localStorage issues
+    if(e.name === 'QuotaExceededError') {
+      toast('❌ Storage full! Delete old photos or clear cache');
+    } else if(e instanceof SyntaxError) {
+      toast('❌ Corrupted claims data. Resetting...');
+      try {
+        localStorage.setItem('dc_philhealth_claims', '{}');
+      } catch(e2) {}
+    } else {
+      toast('❌ Error: ' + e.message);
+    }
+    return null;
+  }
 }
 
 function updateClaimStatus(claimId, newStatus) {
-  let claims = JSON.parse(localStorage.getItem('dc_philhealth_claims') || '{}');
-  if (claims[claimId]) {
-    claims[claimId].status = newStatus;
-    localStorage.setItem('dc_philhealth_claims', JSON.stringify(claims));
-    toast('✅ Claim updated to: ' + newStatus);
-    showPhilHealthClaims();
+  try {
+    let claims = JSON.parse(localStorage.getItem('dc_philhealth_claims') || '{}');
+    if (claims[claimId]) {
+      claims[claimId].status = newStatus;
+      localStorage.setItem('dc_philhealth_claims', JSON.stringify(claims));
+      toast('✅ Claim updated to: ' + newStatus);
+      showPhilHealthClaims();
+    } else {
+      toast('❌ Claim not found');
+    }
+  } catch(e) {
+    if(e.name === 'QuotaExceededError') {
+      toast('❌ Storage full!');
+    } else if(e instanceof SyntaxError) {
+      toast('❌ Corrupted data. Resetting...');
+      try { localStorage.setItem('dc_philhealth_claims', '{}'); } catch(e2) {}
+    } else {
+      toast('❌ Error: ' + e.message);
+    }
   }
 }
 
@@ -3722,60 +3762,73 @@ Ready for submission to PhilHealth`;
 }
 
 function showPhilHealthClaims() {
-  const claims = JSON.parse(localStorage.getItem('dc_philhealth_claims') || '{}');
-  const claimsArray = Object.values(claims).sort((a,b) => 
-    (b.created_date || '').localeCompare(a.created_date || '')
-  );
-  
-  const pendingCount = claimsArray.filter(c=>c.status==='pending').length;
-  const approvedCount = claimsArray.filter(c=>c.status==='approved').length;
-  const paidCount = claimsArray.filter(c=>c.status==='paid').length;
-  const rejectedCount = claimsArray.filter(c=>c.status==='rejected').length;
-  
-  const rows = claimsArray.map(claim => `<tr>
-    <td style="font-size:11px">${claim.id}</td>
-    <td>${_esc(claim.patient_name)}</td>
-    <td style="font-weight:700;color:var(--green)">₱${parseFloat(claim.claim_amount).toLocaleString()}</td>
-    <td><select onchange="updateClaimStatus('${claim.id}', this.value)" style="padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px">
-      <option value="pending" ${claim.status==='pending'?'selected':''}>Pending</option>
-      <option value="approved" ${claim.status==='approved'?'selected':''}>Approved</option>
-      <option value="paid" ${claim.status==='paid'?'selected':''}>Paid</option>
-      <option value="rejected" ${claim.status==='rejected'?'selected':''}>Rejected</option>
-    </select></td>
-    <td style="font-size:11px">${claim.created_date}</td>
-    <td><button class="btn btn-sm" style="background:#2563EB;color:#fff" onclick="exportClaimText('${claim.id}')">📥 Export</button></td>
-  </tr>`).join('');
-  
-  document.getElementById('main').innerHTML = `
-    <div class="section-header">
-      <div class="section-title">📋 PhilHealth Claims</div>
-    </div>
+  try {
+    const claimsStr = localStorage.getItem('dc_philhealth_claims') || '{}';
+    const claims = JSON.parse(claimsStr);
+    const claimsArray = Object.values(claims).sort((a,b) => 
+      (b.created_date || '').localeCompare(a.created_date || '')
+    );
     
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
-      <div style="background:#FEF3C7;padding:12px;border-radius:8px;text-align:center">
-        <div style="font-size:20px;font-weight:700;color:#F59E0B">${pendingCount}</div>
-        <div style="font-size:11px;color:#92400E">Pending</div>
-      </div>
-      <div style="background:#DBEAFE;padding:12px;border-radius:8px;text-align:center">
-        <div style="font-size:20px;font-weight:700;color:#3B82F6">${approvedCount}</div>
-        <div style="font-size:11px;color:#1E40AF">Approved</div>
-      </div>
-      <div style="background:#DCFCE7;padding:12px;border-radius:8px;text-align:center">
-        <div style="font-size:20px;font-weight:700;color:#10B981">${paidCount}</div>
-        <div style="font-size:11px;color:#065F46">Paid</div>
-      </div>
-      <div style="background:#FEE2E2;padding:12px;border-radius:8px;text-align:center">
-        <div style="font-size:20px;font-weight:700;color:#EF4444">${rejectedCount}</div>
-        <div style="font-size:11px;color:#7F1D1D">Rejected</div>
-      </div>
-    </div>
+    const pendingCount = claimsArray.filter(c=>c.status==='pending').length;
+    const approvedCount = claimsArray.filter(c=>c.status==='approved').length;
+    const paidCount = claimsArray.filter(c=>c.status==='paid').length;
+    const rejectedCount = claimsArray.filter(c=>c.status==='rejected').length;
     
-    <div class="table-wrap"><div class="table-scroll">
-      <table><thead><tr>
-        <th>Claim ID</th><th>Patient</th><th>Amount</th><th>Status</th><th>Created</th><th>Action</th>
-      </tr></thead><tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">No claims yet</td></tr>'}</tbody></table>
-    </div></div>
-  `;
+    const rows = claimsArray.map(claim => `<tr>
+      <td style="font-size:11px">${claim.id}</td>
+      <td>${_esc(claim.patient_name)}</td>
+      <td style="font-weight:700;color:var(--green)">₱${parseFloat(claim.claim_amount).toLocaleString()}</td>
+      <td><select onchange="updateClaimStatus('${claim.id}', this.value)" style="padding:4px;border:1px solid #ccc;border-radius:4px;font-size:12px">
+        <option value="pending" ${claim.status==='pending'?'selected':''}>Pending</option>
+        <option value="approved" ${claim.status==='approved'?'selected':''}>Approved</option>
+        <option value="paid" ${claim.status==='paid'?'selected':''}>Paid</option>
+        <option value="rejected" ${claim.status==='rejected'?'selected':''}>Rejected</option>
+      </select></td>
+      <td style="font-size:11px">${claim.created_date}</td>
+      <td><button class="btn btn-sm" style="background:#2563EB;color:#fff" onclick="exportClaimText('${claim.id}')">📥 Export</button></td>
+    </tr>`).join('');
+    
+    document.getElementById('main').innerHTML = `
+      <div class="section-header">
+        <div class="section-title">📋 PhilHealth Claims</div>
+      </div>
+      
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px">
+        <div style="background:#FEF3C7;padding:12px;border-radius:8px;text-align:center">
+          <div style="font-size:20px;font-weight:700;color:#F59E0B">${pendingCount}</div>
+          <div style="font-size:11px;color:#92400E">Pending</div>
+        </div>
+        <div style="background:#DBEAFE;padding:12px;border-radius:8px;text-align:center">
+          <div style="font-size:20px;font-weight:700;color:#3B82F6">${approvedCount}</div>
+          <div style="font-size:11px;color:#1E40AF">Approved</div>
+        </div>
+        <div style="background:#DCFCE7;padding:12px;border-radius:8px;text-align:center">
+          <div style="font-size:20px;font-weight:700;color:#10B981">${paidCount}</div>
+          <div style="font-size:11px;color:#065F46">Paid</div>
+        </div>
+        <div style="background:#FEE2E2;padding:12px;border-radius:8px;text-align:center">
+          <div style="font-size:20px;font-weight:700;color:#EF4444">${rejectedCount}</div>
+          <div style="font-size:11px;color:#7F1D1D">Rejected</div>
+        </div>
+      </div>
+      
+      <div class="table-wrap"><div class="table-scroll">
+        <table><thead><tr>
+          <th>Claim ID</th><th>Patient</th><th>Amount</th><th>Status</th><th>Created</th><th>Action</th>
+        </tr></thead><tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px">No claims yet</td></tr>'}</tbody></table>
+      </div></div>
+    `;
+  } catch(e) {
+    if(e instanceof SyntaxError) {
+      toast('❌ Corrupted claims data. Resetting...');
+      try {
+        localStorage.setItem('dc_philhealth_claims', '{}');
+        document.getElementById('main').innerHTML = '<div style="padding:20px;color:var(--muted)">Claims reset. Please refresh.</div>';
+      } catch(e2) {}
+    } else {
+      toast('❌ Error loading claims: ' + e.message);
+    }
+  }
 }
 
 // ── Auto-CSV: called every time patients are saved ────────────────────────────
@@ -4773,7 +4826,10 @@ function addBill(){
   // Attach amount change listener after modal renders
   setTimeout(()=>{
     const amtField = document.getElementById('f_amount');
-    if(amtField) amtField.addEventListener('change', calculatePhilHealthShare);
+    if(amtField) {
+      amtField.addEventListener('change', calculatePhilHealthShare);
+      amtField.addEventListener('input', calculatePhilHealthShare);  // BONUS: Real-time update
+    }
   }, 100);
 }
 

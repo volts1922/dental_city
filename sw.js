@@ -1,5 +1,5 @@
 // ── Dental City Clinic — Service Worker ──────────────────────────────────────
-const CACHE_VERSION = 'dcclinic-v51'; // PhilHealth MVP added
+const CACHE_VERSION = 'dcclinic-v52'; // PhilHealth MVP critical fixes applied
 const ASSETS = [
   './',
   './index.html',
