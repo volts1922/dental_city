@@ -848,12 +848,13 @@ async function _sbUpsertOne(table, id, record){
 
 // ── Known columns per table ───────────────────────────────────────────────────
 const _SB_COLS = {
-  patients:     ['id','name','age','gender','contact','email','address','medical_history','allergies','branch','photo','updated_at'],
+  patients:     ['id','name','age','gender','contact','email','address','medical_history','allergies','branch','photo','philhealth_has','philhealth_member_id','updated_at'],
   appointments: ['id','patient_id','patient_name','date','time','dentist','type','status','branch','notes','updated_at'],
   treatments:   ['id','patient_id','patient_name','date','procedure_name','tooth','dentist','cost','notes','branch','updated_at'],
-  billing:      ['id','patient_id','patient_name','date','services','amount','paid','payment_method','status','branch','notes','payments','discount_type','discount_pct','discounted_amount','hmo_provider','hmo_card','updated_at'],
+  billing:      ['id','patient_id','patient_name','date','services','amount','paid','payment_method','status','branch','notes','payments','discount_type','discount_pct','discounted_amount','hmo_provider','hmo_card','philhealth_eligible','philhealth_covers','philhealth_patient','updated_at'],
   inventory:    ['id','name','category','quantity','unit','reorder','unit_cost','supplier','expiry','updated_at'],
-  accounts:     ['id','name','role','branch','lastlogin','createdat','forcepasswordchange']
+  accounts:     ['id','name','role','branch','lastlogin','createdat','forcepasswordchange'],
+  philhealth_claims: ['id','billing_id','patient_id','patient_name','member_id','claim_amount','total_amount','patient_share','status','created_date','branch','updated_at']
 };
 
 // ── Prepare a row for Supabase ────────────────────────────────────────────────
@@ -991,7 +992,7 @@ async function syncFromCloud(){
   if(!cfg.url || !cfg.key){ showDashboard(); return; }
   _showSyncBar('⏳ Connecting to Supabase…','#1A7FC1');
   try{
-    for(const t of ['patients','appointments','treatments','billing','inventory']){
+    for(const t of ['patients','appointments','treatments','billing','inventory','philhealth_claims']){
       const data = await _sbPull(t);
       if(data!==null){
         DB.set('dc_default_'+t, data);
@@ -1021,7 +1022,7 @@ async function smartRefresh(btn){
   if(btn){ btn.textContent='⏳ Syncing…'; btn.style.opacity='.6'; btn.disabled=true; }
   try{
     _showSyncBar('⏳ Syncing from Supabase…','#1A7FC1');
-    for(const t of ['patients','appointments','treatments','billing','inventory']){
+    for(const t of ['patients','appointments','treatments','billing','inventory','philhealth_claims']){
       const data = await _sbPull(t);
       if(data!==null) DB.set('dc_default_'+t, data);
     }
@@ -1041,7 +1042,7 @@ async function manualSync(){
   const cfg = getSBConfig();
   if(!cfg.url||!cfg.key){ toast('⚠️ Supabase not configured. Go to ⚙️ Settings.'); return; }
   _showSyncBar('⏳ Syncing…','#1A7FC1');
-  for(const t of ['patients','appointments','treatments','billing','inventory']){
+  for(const t of ['patients','appointments','treatments','billing','inventory','philhealth_claims']){
     const data = await _sbPull(t);
     if(data!==null) DB.set('dc_default_'+t, data);
   }
@@ -1109,6 +1110,7 @@ const KEYS = {
   xrays:        'dc_default_xrays',
   branches:     'dc_default_branches',
   lastBackup:   'dc_default_lastbackup',
+  philhealthClaims: 'dc_default_philhealth_claims',
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1138,7 +1140,7 @@ const load = k => DB.get(k);
 const save = (k, v, _changedId=null) => {
   DB.set(k, v);
   const table = k.replace('dc_default_','');
-  if(!['patients','appointments','treatments','billing','inventory'].includes(table)) return;
+  if(!['patients','appointments','treatments','billing','inventory','philhealth_claims'].includes(table)) return;
 
   if(_changedId){
     // Single record changed — upsert only that one
@@ -2253,6 +2255,20 @@ function _migratePatientPhilHealthFields(){
   if(needsSave){
     save(KEYS.patients, pts);
   }
+
+  // v55: migrate old raw-localStorage claims (dc_philhealth_claims) into cloud-synced key
+  try{
+    const oldRaw = localStorage.getItem('dc_philhealth_claims');
+    if(oldRaw){
+      const oldClaims = JSON.parse(oldRaw);
+      if(oldClaims && Object.keys(oldClaims).length){
+        const newClaims = load(KEYS.philhealthClaims);
+        Object.entries(oldClaims).forEach(([id,c])=>{ if(!newClaims[id]) newClaims[id] = c; });
+        save(KEYS.philhealthClaims, newClaims);
+      }
+      localStorage.removeItem('dc_philhealth_claims');
+    }
+  }catch(e){}
 }
 
 function _filterPatientsByBranch(patients){
@@ -3674,7 +3690,7 @@ function generatePhilHealthClaim(billingId) {
   
   try {
     // FIX #1: Check for existing claim (prevent duplicates)
-    let claims = JSON.parse(localStorage.getItem('dc_philhealth_claims') || '{}');
+    let claims = load(KEYS.philhealthClaims);
     const existingClaim = Object.values(claims).find(c => c.billing_id === billingId);
     if(existingClaim) {
       toast('⚠️ Claim already exists for this bill: ' + existingClaim.id);
@@ -3701,19 +3717,14 @@ function generatePhilHealthClaim(billingId) {
     };
     
     claims[claim.id] = claim;
-    localStorage.setItem('dc_philhealth_claims', JSON.stringify(claims));
+    save(KEYS.philhealthClaims, claims, claim.id);
     
     toast('✅ PhilHealth claim created! ID: ' + claim.id);
     return claim;
   } catch(e) {
-    // FIX #3: Error handling for localStorage issues
+    // FIX #3: Error handling
     if(e.name === 'QuotaExceededError') {
       toast('❌ Storage full! Delete old photos or clear cache');
-    } else if(e instanceof SyntaxError) {
-      toast('❌ Corrupted claims data. Resetting...');
-      try {
-        localStorage.setItem('dc_philhealth_claims', '{}');
-      } catch(e2) {}
     } else {
       toast('❌ Error: ' + e.message);
     }
@@ -3723,29 +3734,22 @@ function generatePhilHealthClaim(billingId) {
 
 function updateClaimStatus(claimId, newStatus) {
   try {
-    let claims = JSON.parse(localStorage.getItem('dc_philhealth_claims') || '{}');
+    let claims = load(KEYS.philhealthClaims);
     if (claims[claimId]) {
       claims[claimId].status = newStatus;
-      localStorage.setItem('dc_philhealth_claims', JSON.stringify(claims));
+      save(KEYS.philhealthClaims, claims, claimId);
       toast('✅ Claim updated to: ' + newStatus);
       showPhilHealthClaims();
     } else {
       toast('❌ Claim not found');
     }
   } catch(e) {
-    if(e.name === 'QuotaExceededError') {
-      toast('❌ Storage full!');
-    } else if(e instanceof SyntaxError) {
-      toast('❌ Corrupted data. Resetting...');
-      try { localStorage.setItem('dc_philhealth_claims', '{}'); } catch(e2) {}
-    } else {
-      toast('❌ Error: ' + e.message);
-    }
+    toast('❌ Error: ' + e.message);
   }
 }
 
 function exportClaimText(claimId) {
-  const claims = JSON.parse(localStorage.getItem('dc_philhealth_claims') || '{}');
+  const claims = load(KEYS.philhealthClaims);
   const claim = claims[claimId];
   if(!claim) { toast('❌ Claim not found'); return; }
   
@@ -3783,7 +3787,7 @@ Ready for submission to PhilHealth`;
 
 function exportPhilHealthClaimsCSV() {
   try {
-    const claims = JSON.parse(localStorage.getItem('dc_philhealth_claims') || '{}');
+    const claims = load(KEYS.philhealthClaims);
     const claimsArray = Object.values(claims);
     
     if(claimsArray.length === 0) {
@@ -3828,8 +3832,13 @@ function exportPhilHealthClaimsCSV() {
 
 function showPhilHealthClaims() {
   try {
-    const claimsStr = localStorage.getItem('dc_philhealth_claims') || '{}';
-    const claims = JSON.parse(claimsStr);
+    const allClaims = load(KEYS.philhealthClaims);
+    // Branch filtering: non-Owner/Admin/Developer roles see only their branch
+    const branch = _saveBranch();
+    const canSeeAll = canSeeAllBranches();
+    const claims = canSeeAll ? allClaims : Object.fromEntries(
+      Object.entries(allClaims).filter(([id,c]) => c.branch === branch)
+    );
     const claimsArray = Object.values(claims).sort((a,b) => 
       (b.created_date || '').localeCompare(a.created_date || '')
     );
@@ -3887,15 +3896,7 @@ function showPhilHealthClaims() {
       </div></div>
     `;
   } catch(e) {
-    if(e instanceof SyntaxError) {
-      toast('❌ Corrupted claims data. Resetting...');
-      try {
-        localStorage.setItem('dc_philhealth_claims', '{}');
-        document.getElementById('main').innerHTML = '<div style="padding:20px;color:var(--muted)">Claims reset. Please refresh.</div>';
-      } catch(e2) {}
-    } else {
-      toast('❌ Error loading claims: ' + e.message);
-    }
+    toast('❌ Error loading claims: ' + e.message);
   }
 }
 
@@ -5629,7 +5630,7 @@ function exportPatients(){
     ['DENTAL CLINIC — PATIENT RECORDS'],
     ['Branch:', branch, 'Exported:', new Date().toLocaleString('en-PH')],
     [],
-    ['ID','Name','Age','Gender','Contact','Email','Address','Medical History','Allergies','Branch','Last Visit']
+    ['ID','Name','Age','Gender','Contact','Email','Address','Medical History','Allergies','PhilHealth','Member ID','Branch','Last Visit']
   ];
   Object.entries(pts)
     .sort((a,b)=>(a[1].name||'').localeCompare(b[1].name||''))
@@ -5637,7 +5638,7 @@ function exportPatients(){
       const visits = Object.values(apts).filter(a=>a.patient_id===id&&a.status==='Completed').map(a=>cleanDate(a.date));
       const last   = visits.length ? visits.sort().pop() : '—';
       rows.push([id,p.name||'',p.age||'',p.gender||'',p.contact||'',p.email||'',
-        p.address||'',p.medical_history||'',p.allergies||'',p.branch||'',last]);
+        p.address||'',p.medical_history||'',p.allergies||'',p.philhealth_has?'Yes':'No',p.philhealth_member_id||'',p.branch||'',last]);
     });
   rows.push([]);
   rows.push(['Total Patients:', Object.keys(pts).length]);

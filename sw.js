@@ -1,5 +1,5 @@
 // ── Dental City Clinic — Service Worker ──────────────────────────────────────
-const CACHE_VERSION = 'dcclinic-v54.1'; // Fixed: Old patients missing PhilHealth fields + migration
+const CACHE_VERSION = 'dcclinic-v55'; // PhilHealth: cloud sync fix (claims table + schema whitelist + branch filter)
 const ASSETS = [
   './',
   './index.html',
