@@ -3883,12 +3883,12 @@ function showPhilHealthClaims() {
 function autoSavePatientsCSV(){
   const pts  = load(KEYS.patients);
   const apts = load(KEYS.appointments);
-  const rows = [['ID','Name','Age','Gender','Contact','Email','Address','Medical History','Allergies','Last Visit']];
+  const rows = [['ID','Name','Age','Gender','Contact','Email','Address','Medical History','Allergies','PhilHealth','Member ID','Last Visit']];
   Object.entries(pts).forEach(([id,p])=>{
     const visits = Object.values(apts).filter(a=>a.patient_id===id&&a.status==='Completed').map(a=>a.date);
     const last = visits.length ? visits.sort().pop() : '—';
     rows.push([id,p.name||'',p.age||'',p.gender||'',p.contact||'',p.email||'',
-      p.address||'',p.medical_history||'',p.allergies||'',last]);
+      p.address||'',p.medical_history||'',p.allergies||'',p.philhealth_has?'Yes':'No',p.philhealth_member_id||'',last]);
   });
   const csv = rows.map(r=>r.map(v=>{
     if(typeof v==='string' && (v.includes(',') || v.includes('"'))){

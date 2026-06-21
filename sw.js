@@ -1,5 +1,5 @@
 // ── Dental City Clinic — Service Worker ──────────────────────────────────────
-const CACHE_VERSION = 'dcclinic-v53'; // Added PhilHealth CSV export
+const CACHE_VERSION = 'dcclinic-v54'; // Added PhilHealth to patient CSV export
 const ASSETS = [
   './',
   './index.html',
