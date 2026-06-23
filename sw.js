@@ -1,8 +1,8 @@
 const CACHE_VER = 'dental-city-clinic-v51';
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/manifest.json',
+  '/dental_city/',
+  '/dental_city/index.html',
+  '/dental_city/manifest.json',
   'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js',
   'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js',
   'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap',

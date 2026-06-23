@@ -2,8 +2,8 @@
   "name": "Dental City Clinic Management",
   "short_name": "DentalCity",
   "description": "Connected Care, Better Smiles — Multi-Branch Dental Clinic Management System",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "/dental_city/",
+  "scope": "/dental_city/",
   "display": "standalone",
   "orientation": "portrait-primary",
   "background_color": "#0F2744",
@@ -54,7 +54,7 @@
       "name": "Add Patient",
       "short_name": "Patient",
       "description": "Quickly add a new patient to the system",
-      "url": "/index.html?action=addPatient",
+      "url": "/dental_city/index.html?action=addPatient",
       "icons": [
         {
           "src": "icon-192.png",
@@ -67,7 +67,7 @@
       "name": "View Appointments",
       "short_name": "Appointments",
       "description": "Check upcoming appointments",
-      "url": "/index.html?action=appointments",
+      "url": "/dental_city/index.html?action=appointments",
       "icons": [
         {
           "src": "icon-192.png",
