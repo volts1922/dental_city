@@ -1090,7 +1090,13 @@ const DB = {
   },
   set(k,v){
     const str = JSON.stringify(v);
-    try{ localStorage.setItem(k, str); } catch(e){}
+    try{ 
+      localStorage.setItem(k, str); 
+    } catch(e){ 
+      if(e.name === 'QuotaExceededError') {
+        toast('⚠️ Storage full! Clear browser cache to continue.');
+      }
+    }
     _mem[k] = str;
   }
 };
@@ -1134,6 +1140,27 @@ function saveClinic(data){
 }
 
 const load = k => DB.get(k);
+
+// ── AUDIT LOGGING — Track all data changes ──────────────────────────────────
+async function _auditLog(action, table, recordId, changes=''){
+  if(!_loggedInUser || !_SB_API_KEY) return;
+  try{
+    await fetch(`${_SB_URL}/rest/v1/clinic_audit_log`, {
+      method:'POST',
+      headers:{ 'apikey':_SB_API_KEY, 'Authorization':'Bearer '+_SB_API_KEY, 'Content-Type':'application/json' },
+      body: JSON.stringify({ 
+        action, 
+        table_name: table, 
+        record_id: recordId, 
+        user_name: _loggedInUser,
+        user_role: currentRole,
+        branch: _myBranch() || 'All',
+        changes: changes.substring(0,500),
+        timestamp: new Date().toISOString() 
+      })
+    });
+  }catch(e){ console.error('Audit log failed:', e); }
+}
 
 // save: writes locally AND upserts only the changed record to Supabase
 // Pass _changedId when you know which record changed (add/edit/delete)
@@ -2698,7 +2725,7 @@ function _autoCleanupManilaBranch(){
   });
 
   localStorage.setItem('_manilaCleanupDone','1');
-  if(changed) console.log('✅ Auto-cleanup: merged Manila Branch -> Manila ('+changed+' accounts)');
+  if(changed) 
 }
 
 function showMergeBranches(){
@@ -3106,6 +3133,9 @@ function openModal(title, bodyHTML, saveFn, saveLabel='💾 Save'){
   document.getElementById('modalBody').innerHTML = bodyHTML;
   document.getElementById('modalSave').textContent = saveLabel;
   _modalSaveFn = saveFn;
+  // Always reset close button visibility on open
+  const closeBtn = document.querySelector('.modal-close');
+  if(closeBtn) closeBtn.style.display = '';
   document.getElementById('overlay').classList.add('show');
 }
 function closeModal(){ document.getElementById('overlay').classList.remove('show'); _modalSaveFn=null; }
@@ -3975,8 +4005,10 @@ function addPatient(){
       allergies:fval('allergies'),gender:fval('gender'),
       philhealth_has: document.getElementById('f_ph_has')?.checked || false,
       philhealth_member_id: document.getElementById('f_ph_member_id')?.value || '',
+      xrays: [],
       branch: _saveBranch() || 'Main Branch'};
     save(KEYS.patients, pts, id);
+    _auditLog('CREATE', 'patients', id, `New patient: ${fval('name')}`);
     closeModal();
     toast('✅ Patient added!');
     autoSavePatientsCSV();
@@ -4004,6 +4036,7 @@ async function editPatient(id){
       branch: p.branch || _saveBranch() || 'Main Branch',
       updated_at: new Date().toISOString()};
     save(KEYS.patients, pts, id);
+    _auditLog('UPDATE', 'patients', id, `Updated: ${fval('name')}`);
     closeModal();
     toast('✅ Patient updated!');
     autoSavePatientsCSV();
@@ -4066,6 +4099,7 @@ function deletePatient(id){
     });
 
     toast(`🗑 "${name}" and all related records deleted`);
+    _auditLog('DELETE', 'patients', id, `Deleted patient: ${name} (${aptIds.length} apts, ${txIds.length} txs, ${bilIds.length} bills)`);
     autoSavePatientsCSV();
     showPatients();
   });
@@ -5334,7 +5368,16 @@ function printInvoice(id){
 // INVENTORY
 // ══════════════════════════════════════════════════════════════════════════════
 function showInventory(){
-  const inv = load(KEYS.inventory);
+  let inv = load(KEYS.inventory);
+  
+  // Apply branch filter (BranchAdmin/Staff can only see their branch's inventory)
+  if(!canSeeAllBranches()) {
+    const myBranch = _myBranch();
+    inv = Object.fromEntries(
+      Object.entries(inv).filter(([k,v]) => v.branch === myBranch || !v.branch)
+    );
+  }
+  
   const now = new Date();
   const in30 = new Date(); in30.setDate(in30.getDate()+30);
 
@@ -5890,7 +5933,7 @@ async function _uploadBackupToCloud(snapshot){
       body: csv
     });
     if(res.ok){
-      console.log('☁️ Backup uploaded:', path);
+      
       // Only prune once a day to avoid slowdowns
       const lastPrune = parseInt(localStorage.getItem('_lastCloudPrune')||'0');
       if(Date.now()-lastPrune > 86400000){
@@ -5951,7 +5994,7 @@ async function showCloudBackups(){
           body: JSON.stringify({limit:200,offset:0,prefix:'',sortBy:{column:'name',order:'asc'}})
         });
         const rawItems = await listRes.json();
-        console.log('Storage list status:', listRes.status, 'items:', JSON.stringify(rawItems).substring(0,300));
+        
         if(listRes.ok && Array.isArray(rawItems) && rawItems.length){
           const folderSet = new Set();
           rawItems.forEach(f=>{
@@ -5960,7 +6003,7 @@ async function showCloudBackups(){
           });
           allFolders = [...folderSet].filter(Boolean);
         }
-      }catch(e){ console.log('Storage list error:', e.message); }
+      }catch(e){ 
       // Fallback: build from accounts if Storage listing fails
       if(!allFolders.length){
         const accounts = getAllAccounts();
@@ -6206,7 +6249,7 @@ async function _autoSyncToCloud(){
     }
     console.log('☁️ Auto-sync complete —', pushed, 'records pushed');
     localStorage.setItem('_lastCloudSync', new Date().toLocaleString('en-PH'));
-  }catch(e){ console.log('Auto-sync error:', e.message); }
+  }catch(e){ 
 }
 
 // Get backup health status
@@ -8825,11 +8868,11 @@ const _DC_LOGO_RECEIPT = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAADI
 // ── PWA Service Worker — inlined so GitHub Pages always serves latest ────────
 if('serviceWorker' in navigator){
   // Cache-bust sw.js with version string so GitHub Pages always serves latest
-  const _SW_VER = 'dcclinic-v50';
+  const _SW_VER = 'dcclinic-v51';
 
   async function _registerSW(){
     // Do NOT unregister — let SW update flow naturally so banner can show
-    return navigator.serviceWorker.register('./sw.js?v=50', {updateViaCache:'none'});
+    return navigator.serviceWorker.register('./sw.js?v=51', {updateViaCache:'none'});
   }
 
   function _setupReg(reg){
@@ -9891,9 +9934,9 @@ async function _clearChat(){
 
 
 // ── Photo storage — kept separate from patient records to avoid localStorage quota ──
-function _savePhoto(pid, data){ try{ const k=`dc_photo_${_saveBranch()||'default'}_${pid}`; localStorage.setItem(k, data||''); }catch(e){} }
-function _loadPhoto(pid){ try{ const k=`dc_photo_${_saveBranch()||'default'}_${pid}`; return localStorage.getItem(k)||''; }catch(e){ return ''; } }
-function _deletePhoto(pid){ try{ const k=`dc_photo_${_saveBranch()||'default'}_${pid}`; localStorage.removeItem(k); }catch(e){} }
+function _savePhoto(pid, data){ try{ localStorage.setItem(`dc_photo_${pid}`, data||''); }catch(e){ toast('⚠️ Photo storage full'); } }
+function _loadPhoto(pid){ try{ return localStorage.getItem(`dc_photo_${pid}`)||''; }catch(e){ return ''; } }
+function _deletePhoto(pid){ try{ localStorage.removeItem(`dc_photo_${pid}`); }catch(e){} }
 function _esc(t){ const d=document.createElement('div'); d.textContent=t; return d.innerHTML; }
 function _renderChat(){
   const me = _loggedInUser||'owner';

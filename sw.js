@@ -1,10 +1,10 @@
-const CACHE_VER = 'dental-city-clinic-v1';
+const CACHE_VER = 'dental-city-clinic-v51';
 const urlsToCache = [
   '/',
   '/index.html',
   '/manifest.json',
   'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js',
-  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js',
+  'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js',
   'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap',
 ];
 
@@ -34,7 +34,7 @@ self.addEventListener('fetch', event => {
   const url = new URL(request.url);
 
   // Skip cross-origin and non-GET
-  if (url.origin !== location.origin && !url.hostname.includes('cdnjs') && !url.hostname.includes('googleapis') && !url.hostname.includes('jsdelivr')) {
+  if (url.origin !== location.origin && !url.hostname.includes('cdnjs') && !url.hostname.includes('googleapis') && !url.hostname.includes('unpkg')) {
     return;
   }
   if (request.method !== 'GET') return;
