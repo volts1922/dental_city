@@ -2765,7 +2765,7 @@ function _autoCleanupManilaBranch(){
   });
 
   localStorage.setItem('_manilaCleanupDone','1');
-  if(changed) 
+  if(changed) console.log('✅ Auto-cleanup: merged Manila Branch -> Manila ('+changed+' accounts)');
 }
 
 function showMergeBranches(){
@@ -5973,7 +5973,7 @@ async function _uploadBackupToCloud(snapshot){
       body: csv
     });
     if(res.ok){
-      
+      console.log('☁️ Backup uploaded:', path);
       // Only prune once a day to avoid slowdowns
       const lastPrune = parseInt(localStorage.getItem('_lastCloudPrune')||'0');
       if(Date.now()-lastPrune > 86400000){
@@ -6034,7 +6034,7 @@ async function showCloudBackups(){
           body: JSON.stringify({limit:200,offset:0,prefix:'',sortBy:{column:'name',order:'asc'}})
         });
         const rawItems = await listRes.json();
-        
+        console.log('Storage list status:', listRes.status, 'items:', JSON.stringify(rawItems).substring(0,300));
         if(listRes.ok && Array.isArray(rawItems) && rawItems.length){
           const folderSet = new Set();
           rawItems.forEach(f=>{
@@ -6043,7 +6043,7 @@ async function showCloudBackups(){
           });
           allFolders = [...folderSet].filter(Boolean);
         }
-      }catch(e){ 
+      }catch(e){ console.log('Storage list error:', e.message); }
       // Fallback: build from accounts if Storage listing fails
       if(!allFolders.length){
         const accounts = getAllAccounts();
@@ -6289,7 +6289,7 @@ async function _autoSyncToCloud(){
     }
     console.log('☁️ Auto-sync complete —', pushed, 'records pushed');
     localStorage.setItem('_lastCloudSync', new Date().toLocaleString('en-PH'));
-  }catch(e){ 
+  }catch(e){ console.log('Auto-sync error:', e.message); }
 }
 
 // Get backup health status
