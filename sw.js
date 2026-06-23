@@ -1,65 +1,54 @@
-// ── Dental City Clinic — Service Worker ──────────────────────────────────────
-const CACHE_VERSION = 'dcclinic-v55.3'; // Clickable names in Multi-Branch tabs (patients/appointments/billing)
-const ASSETS = [
-  './',
-  './index.html',
-  './manifest.json',
-  'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap',
+const CACHE_VER = 'dental-city-clinic-v1';
+const urlsToCache = [
+  '/',
+  '/index.html',
+  '/manifest.json',
   'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js',
-  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2'
+  'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js',
+  'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap',
 ];
 
-self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE_VERSION).then(c => c.addAll(ASSETS).catch(() => {}))
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_VER)
+      .then(cache => cache.addAll(urlsToCache))
+      .then(() => self.skipWaiting())
+      .catch(err => console.log('Cache install error:', err))
   );
 });
 
-self.addEventListener('activate', e => {
-  e.waitUntil(
+self.addEventListener('activate', event => {
+  event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(k => k !== CACHE_VERSION).map(k => caches.delete(k))))
+      .then(versions => Promise.all(
+        versions
+          .filter(v => v !== CACHE_VER)
+          .map(v => caches.delete(v))
+      ))
       .then(() => self.clients.claim())
   );
 });
 
-self.addEventListener('fetch', e => {
-  if (e.request.method !== 'GET') return;
-  const url = new URL(e.request.url);
-  if (url.hostname.includes('supabase') ||
-      url.pathname.includes('/rest/') ||
-      url.pathname.includes('/auth/') ||
-      url.pathname.includes('/storage/')) return;
+self.addEventListener('fetch', event => {
+  const { request } = event;
+  const url = new URL(request.url);
 
-  // Always network-first for HTML
-  if (e.request.mode === 'navigate' || url.pathname.endsWith('.html')) {
-    e.respondWith(
-      fetch(e.request, {cache:'no-store'})
-        .then(res => {
-          const clone = res.clone();
-          caches.open(CACHE_VERSION).then(c => c.put(e.request, clone));
-          return res;
-        })
-        .catch(() => caches.match(e.request))
-    );
+  // Skip cross-origin and non-GET
+  if (url.origin !== location.origin && !url.hostname.includes('cdnjs') && !url.hostname.includes('googleapis') && !url.hostname.includes('jsdelivr')) {
     return;
   }
+  if (request.method !== 'GET') return;
 
-  e.respondWith(
-    caches.match(e.request).then(cached => {
-      if (cached) return cached;
-      return fetch(e.request).then(res => {
-        if (res && res.status === 200 && res.type !== 'opaque') {
-          const clone = res.clone();
-          caches.open(CACHE_VERSION).then(c => c.put(e.request, clone));
-        }
-        return res;
-      });
-    })
+  event.respondWith(
+    caches.match(request)
+      .then(response => response || fetch(request)
+        .then(res => {
+          if (!res || res.status !== 200 || res.type === 'error') return res;
+          const cloned = res.clone();
+          caches.open(CACHE_VER).then(cache => cache.put(request, cloned));
+          return res;
+        })
+        .catch(() => caches.match('/index.html'))
+      )
   );
-});
-
-self.addEventListener('message', e => {
-  if (e.data === 'skipWaiting' || (e.data && e.data.type === 'SKIP_WAITING'))
-    self.skipWaiting();
 });
