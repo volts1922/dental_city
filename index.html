@@ -259,59 +259,99 @@ tbody td{padding:11px 15px;color:var(--text-2);white-space:nowrap;font-size:13px
 .badge-gray{background:var(--bg-2);color:var(--muted);}
 .badge-teal{background:var(--teal-bg);color:var(--teal);}
 
-/* ── Modal ── */
+/* ── Modal — Windows 95 Style ── */
 .overlay{
   display:none;position:fixed;inset:0;
-  background:rgba(15,23,42,0.45);
-  backdrop-filter:blur(6px);
+  background:rgba(192,192,192,0.9);
   z-index:200;align-items:center;justify-content:center;padding:16px;
 }
 .overlay.show{display:flex;}
 .modal{
-  background:var(--white);border-radius:16px;
+  background:#c0c0c0;
   width:100%;max-width:500px;max-height:90vh;
   display:flex;flex-direction:column;
-  box-shadow:0 20px 60px rgba(0,0,0,0.18),0 4px 16px rgba(0,0,0,0.08);
+  border:2px solid;
+  border-color:#dfdfdf #808080 #808080 #dfdfdf;
+  box-shadow:1px 1px 0 #ffffff inset, -1px -1px 0 #404040 inset;
   animation:slideUp .22s cubic-bezier(.34,1.2,.64,1);
 }
 @keyframes slideUp{from{transform:translateY(20px);opacity:0;}to{transform:translateY(0);opacity:1;}}
 @keyframes slideDown{from{transform:translateY(-100%);opacity:0;}to{transform:translateY(0);opacity:1;}}
 .modal-header{
-  padding:20px 24px 16px;
-  border-bottom:1px solid var(--border);
+  padding:2px 2px 2px 2px;
   display:flex;align-items:center;justify-content:space-between;
-  background:var(--bg);border-radius:16px 16px 0 0;
+  background:linear-gradient(90deg, #000080 0%, #1084d7 100%);
+  border:2px solid;
+  border-color:#dfdfdf #404040 #404040 #dfdfdf;
 }
-.modal-title{font-family:var(--font-serif);font-size:17px;font-weight:500;color:var(--text);}
+.modal-title{
+  font-family:'MS Sans Serif', Arial, sans-serif;font-size:14px;
+  font-weight:700;color:#ffffff;padding:2px 2px;
+  text-shadow:1px 1px 0 rgba(0,0,0,0.3);
+}
 .modal-close{
-  background:none;border:none;font-size:20px;
-  cursor:pointer;color:var(--muted);line-height:1;
-  padding:4px 7px;border-radius:var(--radius-xs);transition:all .15s;
+  background:linear-gradient(135deg, #c0c0c0 0%, #dfdfdf 100%);
+  border:2px solid;border-color:#dfdfdf #404040 #404040 #dfdfdf;
+  font-size:16px;cursor:pointer;color:#000;
+  line-height:1;padding:0px 3px;font-weight:700;
+  width:20px;height:20px;display:flex;align-items:center;justify-content:center;
+  transition:all .1s;margin:1px;
 }
-.modal-close:hover{background:var(--bg-2);color:var(--text);}
-.modal-body{padding:20px 24px;overflow-y:auto;flex:1;}
-.modal-footer{padding:14px 24px;border-top:1px solid var(--border);}
-.modal-footer .btn{width:100%;justify-content:center;padding:12px;}
+.modal-close:hover{background:linear-gradient(135deg, #dfdfdf 0%, #c0c0c0 100%);border-color:#404040 #dfdfdf #dfdfdf #404040;}
+.modal-close:active{border-color:#404040 #dfdfdf #dfdfdf #404040;background:#c0c0c0;}
+.modal-body{
+  padding:8px 8px;overflow-y:auto;flex:1;
+  background:#c0c0c0;font-family:'MS Sans Serif', Arial, sans-serif;font-size:11px;
+  color:#000;
+}
+.modal-footer{
+  padding:8px 8px;
+  background:#c0c0c0;
+  border-top:2px solid;border-color:#dfdfdf #404040 #404040 #dfdfdf;
+  display:flex;gap:4px;justify-content:flex-end;
+}
+.modal-footer .btn{
+  background:linear-gradient(135deg, #dfdfdf 0%, #808080 100%);
+  border:2px solid;border-color:#dfdfdf #404040 #404040 #dfdfdf;
+  color:#000;font-family:'MS Sans Serif', Arial, sans-serif;
+  font-size:11px;font-weight:700;padding:4px 12px;
+  min-width:75px;text-align:center;cursor:pointer;
+  transition:all .05s;
+  box-shadow:inset 1px 1px 0 #ffffff, inset -1px -1px 0 #404040;
+}
+.modal-footer .btn:hover{background:linear-gradient(135deg, #dfdfdf 0%, #a0a0a0 100%);}
+.modal-footer .btn:active{
+  border-color:#404040 #dfdfdf #dfdfdf #404040;
+  box-shadow:inset -1px -1px 0 #ffffff, inset 1px 1px 0 #404040;
+}
 
-/* ── Form ── */
-.form-group{margin-bottom:14px;}
+/* ── Form — Windows Style ── */
+.form-group{margin-bottom:12px;}
 .form-label{
-  display:block;font-size:11px;font-weight:600;
-  color:var(--muted);margin-bottom:5px;
-  text-transform:uppercase;letter-spacing:0.5px;
+  display:block;font-size:11px;font-weight:700;
+  color:#000;margin-bottom:3px;
+  font-family:'MS Sans Serif', Arial, sans-serif;
 }
 .form-control{
-  width:100%;padding:9px 12px;
-  border:1.5px solid var(--border);border-radius:var(--radius-sm);
-  font-family:var(--font-sans);font-size:13px;outline:none;
-  transition:border .18s,box-shadow .18s;
-  background:var(--white);color:var(--text);
+  width:100%;padding:3px 4px;
+  border:2px solid;border-color:#808080 #dfdfdf #dfdfdf #808080;
+  font-family:'MS Sans Serif', Arial, sans-serif;font-size:11px;outline:none;
+  transition:border .1s;
+  background:#ffffff;color:#000;
+  box-shadow:inset 1px 1px 0 #dfdfdf, inset -1px -1px 0 #404040;
 }
 .form-control:focus{
-  border-color:var(--blue);
-  box-shadow:0 0 0 3px rgba(37,99,235,0.08);
+  border-color:#000080;
+  outline:1px dotted #000;
+  outline-offset:-4px;
 }
-select.form-control{cursor:pointer;}
+select.form-control{
+  cursor:pointer;
+  background-image:url('data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2712%27 height=%276%27 viewBox=%220 0 12 6%22%3E%3Cpath fill=%27%23000%27 d=%27M0 0l6 6 6-6z%27/%3E%3C/svg%3E');
+  background-repeat:no-repeat;
+  background-position:right 4px center;
+  padding-right:20px;
+}
 
 /* ── Dental Chart ── */
 .chart-container{
