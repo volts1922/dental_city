@@ -1570,7 +1570,7 @@ async function _refreshSeqCache(){
 // ── Clock ─────────────────────────────────────────────────────────────────────
 function updateClock(){
   const now = new Date();
-  document.getElementById('clock').textContent =
+  (document.getElementById('clock')||{}).textContent =
     now.toLocaleDateString('en-PH',{month:'long',day:'numeric',year:'numeric'}) + '  ' +
     now.toLocaleTimeString('en-PH',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
 }
@@ -1628,7 +1628,7 @@ function showBranchSetupModal(){
       <input class="form-control" id="f_branch_name" placeholder="e.g. Main Branch, Makati Branch..." style="font-size:15px;padding:12px">
     </div>`,
     ()=>{
-      const name = document.getElementById('f_branch_name').value.trim();
+      const name = document.getElementById('f_branch_name')?.value.trim();
       if(!name){ toast('Please enter a branch name!'); return; }
       setBranchName(name);
       updateBranchBadge(name);
@@ -1698,7 +1698,7 @@ function changeBranchName(){
       ✅ Saved on this device only — each branch sets their own name.
     </p>`,
     ()=>{
-      const name = document.getElementById('f_branch_name').value.trim();
+      const name = document.getElementById('f_branch_name')?.value.trim();
       if(!name){ toast('Please enter a branch name!'); return; }
       setBranchName(name);
       updateBranchBadge(name);
@@ -1954,8 +1954,8 @@ function _showSBConfigPrompt(){
       💡 You only need to do this once on each device.
     </div>`,
     ()=>{
-      const url = (document.getElementById('f_sb_url2').value||'').trim().replace(/\/$/,'');
-      const key = (document.getElementById('f_sb_key2').value||'').trim();
+      const url = (document.getElementById('f_sb_url2')?.value||'').trim().replace(/\/$/,'');
+      const key = (document.getElementById('f_sb_key2')?.value||'').trim();
       if(!url||!key){ toast('Please enter both URL and Key'); return; }
       saveSBConfig(url, key);
       closeModal();
@@ -2009,8 +2009,8 @@ async function doLogin(){
       err.textContent = '⏳ Too many attempts. Please wait 30 seconds.';
       return;
     }
-    const u = (document.getElementById('loginUser').value||'').trim().toLowerCase();
-    const p = (document.getElementById('loginPass').value||'');
+    const u = (document.getElementById('loginUser')?.value||'').trim().toLowerCase();
+    const p = (document.getElementById('loginPass')?.value||'');
 
     if(!u || !p){
       err.textContent = '❌ Please enter username and password.';
@@ -2033,8 +2033,8 @@ async function doLogin(){
       document.querySelector('.topbar').style.display      = 'flex';
       document.querySelector('.sidebar').style.display     = 'flex';
       document.getElementById('userBadge').style.display   = 'flex';
-      document.getElementById('userNameLabel').textContent = 'Developer';
-      document.getElementById('userRoleBadge').textContent = 'Developer';
+      (document.getElementById('userNameLabel')||{}).textContent = 'Developer';
+      (document.getElementById('userRoleBadge')||{}).textContent = 'Developer';
       document.getElementById('userRoleBadge').style.cssText = 'padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;background:#7C3AED;color:#fff';
       initBranchName();
       buildNav();
@@ -2063,14 +2063,14 @@ async function doLogin(){
   if(_loginAttempts >= 5){
         _loginLocked = true;
         err.textContent = '🔒 Too many failed attempts. Locked for 30 seconds.';
-        document.getElementById('loginPass').value = '';
+        (document.getElementById('loginPass')||{}).value = '';
         setTimeout(()=>{ _loginLocked=false; _loginAttempts=0; err.textContent=''; }, 30000);
       } else if(!userExists){
         err.textContent = `❌ Username "${u}" not found. Check spelling.`;
-        document.getElementById('loginPass').value = '';
+        (document.getElementById('loginPass')||{}).value = '';
       } else {
         err.textContent = `❌ Wrong password. (${5-_loginAttempts} attempts left)`;
-        document.getElementById('loginPass').value = '';
+        (document.getElementById('loginPass')||{}).value = '';
       }
       return;
     }
@@ -2164,8 +2164,8 @@ function _showForcePasswordChange(username){
       <input class="form-control" type="password" id="f_fp_confirm" placeholder="Repeat new password">
     </div>`,
     async ()=>{
-      const np = document.getElementById('f_fp_new').value;
-      const cp = document.getElementById('f_fp_confirm').value;
+      const np = document.getElementById('f_fp_new')?.value;
+      const cp = document.getElementById('f_fp_confirm')?.value;
       if(!np || np.length < 8){ toast('Password must be at least 8 characters.'); return; }
       if(np !== cp){ toast('Passwords do not match!'); return; }
       const str = _passwordStrength(np);
@@ -2200,8 +2200,8 @@ async function doLogout(silent=false){
   document.getElementById('userBadge').style.display = 'none';
   document.querySelector('.sidebar').style.display = 'none';
   document.querySelector('.topbar').style.display  = 'none';
-  document.getElementById('loginUser').value = '';
-  document.getElementById('loginPass').value = '';
+  (document.getElementById('loginUser')||{}).value = '';
+  (document.getElementById('loginPass')||{}).value = '';
   
 document.getElementById('loginUser').focus();
   if(silent) toast('🔒 Session expired. Please log in again.');
@@ -2228,9 +2228,9 @@ function changePassword(){
       <input class="form-control" type="password" id="f_cp_confirm" placeholder="Repeat new password"></div>
     <p style="font-size:11px;color:var(--green);margin-top:4px">✅ Password is hashed and saved securely.</p>`,
     async ()=>{
-      const np = document.getElementById('f_cp_new').value;
-      const cp = document.getElementById('f_cp_confirm').value;
-      const u  = document.getElementById('f_cp_user').value;
+      const np = document.getElementById('f_cp_new')?.value;
+      const cp = document.getElementById('f_cp_confirm')?.value;
+      const u  = document.getElementById('f_cp_user')?.value;
       if(!np || np.length < 8){ toast('Password must be at least 8 characters'); return; }
       if(np !== cp){ toast('Passwords do not match!'); return; }
       const str = _passwordStrength(np);
@@ -2280,7 +2280,7 @@ async function changeUsername(){
     _sbDelete('accounts', _loggedInUser).catch(()=>{});
 
     _loggedInUser = newName;
-    document.getElementById('userNameLabel').textContent = newName;
+    (document.getElementById('userNameLabel')||{}).textContent = newName;
     closeModal();
     toast('✅ Username changed to: ' + newName);
   }, '💾 Save');
@@ -2409,7 +2409,7 @@ function applyRoleRestrictions(){
 // ══════════════════════════════════════════════════════════════════════════════
 function showSettings(){
   const cl = getClinic();
-  document.getElementById('main').innerHTML = `
+  (document.getElementById('main')||{}).innerHTML = `
     <div class="section-header">
       <div class="section-title">⚙️ Clinic Settings</div>
     </div>
@@ -2571,11 +2571,11 @@ function updateSettingsPreview(){
 
 function saveSettings(){
   const cl = {
-    name:    (document.getElementById('cs_name').value||'').trim() || 'Dental City Clinic',
-    tagline: (document.getElementById('cs_tagline').value||'').trim(),
-    address: (document.getElementById('cs_address').value||'').trim(),
-    phone:   (document.getElementById('cs_phone').value||'').trim(),
-    email:   (document.getElementById('cs_email').value||'').trim(),
+    name:    (document.getElementById('cs_name')?.value||'').trim() || 'Dental City Clinic',
+    tagline: (document.getElementById('cs_tagline')?.value||'').trim(),
+    address: (document.getElementById('cs_address')?.value||'').trim(),
+    phone:   (document.getElementById('cs_phone')?.value||'').trim(),
+    email:   (document.getElementById('cs_email')?.value||'').trim(),
     sheetsUrl: getClinic().sheetsUrl,
   };
   saveClinic(cl);
@@ -2602,7 +2602,7 @@ function saveSupabaseConfig(){ toast('ℹ️ Credentials are hardcoded — no ch
 
 // Branch admin saves their own sheet URL locally
 function saveBranchSheetUrl(){
-  const url    = (document.getElementById('cs_branch_sheet').value||'').trim();
+  const url    = (document.getElementById('cs_branch_sheet')?.value||'').trim();
   const branch = getBranchName();
   if(!url){ toast('⚠️ Please enter a URL'); return; }
   if(!branch){ toast('⚠️ Branch name not set'); return; }
@@ -2899,11 +2899,11 @@ function addAccount(){
       💡 User will be prompted to change their password on first login.
     </div>`,
     async ()=>{
-      const u    = (document.getElementById('f_acc_user').value||'').trim().toLowerCase().replace(/\s+/g,'_');
-      const name = (document.getElementById('f_acc_name').value||'').trim();
-      const role = document.getElementById('f_acc_role').value;
-      const branch = (document.getElementById('f_acc_branch').value||'').trim();
-      const pw   = document.getElementById('f_acc_pw').value;
+      const u    = (document.getElementById('f_acc_user')?.value||'').trim().toLowerCase().replace(/\s+/g,'_');
+      const name = (document.getElementById('f_acc_name')?.value||'').trim();
+      const role = document.getElementById('f_acc_role')?.value;
+      const branch = (document.getElementById('f_acc_branch')?.value||'').trim();
+      const pw   = document.getElementById('f_acc_pw')?.value;
 
       if(!u)     { toast('Username is required'); return; }
       if(!name)  { toast('Display name is required'); return; }
@@ -2963,9 +2963,9 @@ function editAccount(username){
       <input class="form-control" id="f_edit_branch" value="${acc.branch||''}" placeholder="Leave blank for Admin role">
     </div>`,
     ()=>{
-      const name   = (document.getElementById('f_edit_name').value||'').trim();
-      const role   = document.getElementById('f_edit_role').value;
-      const branch = (document.getElementById('f_edit_branch').value||'').trim();
+      const name   = (document.getElementById('f_edit_name')?.value||'').trim();
+      const role   = document.getElementById('f_edit_role')?.value;
+      const branch = (document.getElementById('f_edit_branch')?.value||'').trim();
       if(!name){ toast('Display name required'); return; }
       const accounts2 = getAllAccounts();
       accounts2[username] = { ...accounts2[username], name, role, branch: role==='Admin'?null:branch };
@@ -3014,8 +3014,8 @@ function resetAccountPassword(username){
       💡 User will be required to change this password on next login.
     </div>`,
     async ()=>{
-      const pw  = document.getElementById('f_rst_pw').value;
-      const cpw = document.getElementById('f_rst_confirm').value;
+      const pw  = document.getElementById('f_rst_pw')?.value;
+      const cpw = document.getElementById('f_rst_confirm')?.value;
       if(!pw || pw.length < 8){ toast('Password must be at least 8 characters'); return; }
       if(pw !== cpw){ toast('Passwords do not match'); return; }
       if(_passwordStrength(pw).score < 1){ toast('Password is too weak'); return; }
@@ -3057,7 +3057,7 @@ function quickSetupBranches(){
       ⚠️ All accounts will be forced to change their password on first login.
     </div>`,
     async ()=>{
-      const pw = document.getElementById('f_br_pw').value;
+      const pw = document.getElementById('f_br_pw')?.value;
       if(!pw || pw.length < 8){ toast('Password must be at least 8 characters'); return; }
       if(_passwordStrength(pw).score < 1){ toast('Password is too weak'); return; }
 
@@ -3166,7 +3166,7 @@ function navigate(label, fn, arg){
   if(typeof _stopCam==='function') _stopCam();
   currentPage = label;
   currentFn   = fn;
-  document.getElementById('topbarTitle').textContent = label;
+  (document.getElementById('topbarTitle')||{}).textContent = label;
   buildNav(); closeSidebar();
   window[fn](arg||'');
   setTimeout(applyRoleRestrictions, 50);
@@ -3191,9 +3191,9 @@ async function _confirmClearQueue(){
 
 let _modalSaveFn = null;
 function openModal(title, bodyHTML, saveFn, saveLabel='💾 Save'){
-  document.getElementById('modalTitle').textContent = title;
-  document.getElementById('modalBody').innerHTML = bodyHTML;
-  document.getElementById('modalSave').textContent = saveLabel;
+  (document.getElementById('modalTitle')||{}).textContent = title;
+  (document.getElementById('modalBody')||{}).innerHTML = bodyHTML;
+  (document.getElementById('modalSave')||{}).textContent = saveLabel;
   _modalSaveFn = saveFn;
   // Always reset close button visibility on open
   const closeBtn = document.querySelector('.modal-close');
@@ -3488,7 +3488,7 @@ function showDashboard(){
       </tr>`;
     }).join('') || `<tr><td colspan="7" class="empty"><div class="empty-icon">📅</div><p>No appointments today</p></td></tr>`;
 
-  document.getElementById('main').innerHTML = `
+  (document.getElementById('main')||{}).innerHTML = `
     ${!canSeeAllBranches() ? `<div style="background:#EFF6FF;border:1.5px solid #1A7FC1;border-radius:10px;padding:10px 16px;margin-bottom:14px;font-size:13px;color:#1A7FC1">
       📍 Showing data for <b>${_myBranch()}</b> only. Login as Owner to see all branches.
     </div>` : ''}
@@ -3608,7 +3608,7 @@ function _hasTreatmentForApt(aptId, patientId){
 // PATIENTS
 // ══════════════════════════════════════════════════════════════════════════════
 function showPatients(q=''){
-  document.getElementById('main').innerHTML = `
+  (document.getElementById('main')||{}).innerHTML = `
     <div class="section-header">
       <div class="section-title">Patient Records</div>
       <div class="btn-row">
@@ -3723,7 +3723,7 @@ function previewPhoto(input){
       const compressed = canvas.toDataURL('image/jpeg', 0.7);
 
       // Save to hidden input
-      document.getElementById('f_photo').value = compressed;
+      (document.getElementById('f_photo')||{}).value = compressed;
 
       // Show preview
       const box = document.getElementById('photoBox');
@@ -3739,10 +3739,10 @@ function previewPhoto(input){
 }
 
 function removePhoto(){
-  document.getElementById('f_photo').value = '';
-  document.getElementById('photoBox').innerHTML =
+  (document.getElementById('f_photo')||{}).value = '';
+  (document.getElementById('photoBox')||{}).innerHTML =
     '<span style="font-size:32px;color:var(--muted)">👤</span>';
-  document.getElementById('f_photo_file').value = '';
+  (document.getElementById('f_photo_file')||{}).value = '';
 }
 
 // ── PhilHealth MVP Helpers ────────────────────────────────────────────────────
@@ -3758,12 +3758,12 @@ function calculatePhilHealthShare(){
     const covers = Math.round(amount * 0.71);
     const patient = amount - covers;  // FIX #2: Ensures exact total
     
-    document.getElementById('ph_cost').textContent = '₱' + amount.toLocaleString();
-    document.getElementById('ph_covers').textContent = '₱' + covers.toLocaleString();
-    document.getElementById('ph_patient').textContent = '₱' + patient.toLocaleString();
+    (document.getElementById('ph_cost')||{}).textContent = '₱' + amount.toLocaleString();
+    (document.getElementById('ph_covers')||{}).textContent = '₱' + covers.toLocaleString();
+    (document.getElementById('ph_patient')||{}).textContent = '₱' + patient.toLocaleString();
     
-    document.getElementById('f_ph_covers').value = covers;
-    document.getElementById('f_ph_patient').value = patient;
+    (document.getElementById('f_ph_covers')||{}).value = covers;
+    (document.getElementById('f_ph_patient')||{}).value = patient;
   }
 }
 
@@ -3954,7 +3954,7 @@ function showPhilHealthClaims() {
       <td><button class="btn btn-sm" style="background:#2563EB;color:#fff" onclick="exportClaimText('${claim.id}')">📥 Export</button></td>
     </tr>`).join('');
     
-    document.getElementById('main').innerHTML = `
+    (document.getElementById('main')||{}).innerHTML = `
       <div class="section-header">
         <div class="section-title">📋 PhilHealth Claims</div>
         <div class="btn-row">
@@ -4405,7 +4405,7 @@ function showAppointments(filters={}){
     </tr>`;
   }).join('') || `<tr><td colspan="8"><div class="empty"><div class="empty-icon">📅</div><p>No appointments match your filter</p><button class="btn btn-primary btn-sm" onclick="clearAptFilters()" style="margin-top:8px">Clear Filters</button></div></td></tr>`;
 
-  document.getElementById('main').innerHTML = `
+  (document.getElementById('main')||{}).innerHTML = `
     <div class="section-header">
       <div class="section-title">Appointments</div>
       <div class="btn-row">
@@ -4518,7 +4518,7 @@ function setAptQuick(preset){
 // TREATMENTS
 // ══════════════════════════════════════════════════════════════════════════════
 function showTreatments(q=''){
-  document.getElementById('main').innerHTML = `
+  (document.getElementById('main')||{}).innerHTML = `
     <div class="section-header">
       <div class="section-title">Treatments & Procedures</div>
       <div class="btn-row">
@@ -4661,7 +4661,7 @@ let chartPatientId = '';
 function showDentalChart(){
   const allPts = load(KEYS.patients);
   const pts    = _filterPatientsByBranch(allPts);
-  document.getElementById('main').innerHTML = `
+  (document.getElementById('main')||{}).innerHTML = `
     <div class="section-header">
       <div class="section-title">Dental Chart</div>
       <div class="btn-row">
@@ -4681,7 +4681,7 @@ function showDentalChart(){
 }
 
 function loadChart(){
-  chartPatientId = document.getElementById('chartPatSel').value;
+  chartPatientId = document.getElementById('chartPatSel')?.value;
   if(!chartPatientId) return;
   renderChart();
   renderChartHistory();
@@ -4711,7 +4711,7 @@ function renderChart(){
     }).join('');
   }
 
-  document.getElementById('chartContainer').innerHTML = `
+  (document.getElementById('chartContainer')||{}).innerHTML = `
     <div style="min-width:640px">
       <div style="text-align:center;font-size:12px;color:var(--muted);margin-bottom:8px">UPPER JAW</div>
       <div class="teeth-row">${teethRow(UPPER)}</div>
@@ -4726,7 +4726,7 @@ function renderChartHistory(){
   const chart  = charts[chartPatientId] || {};
   const entries = Object.entries(chart);
   if(!entries.length){
-    document.getElementById('chartHistory').innerHTML = '';
+    (document.getElementById('chartHistory')||{}).innerHTML = '';
     return;
   }
   const rows = entries.map(([tooth,info])=>`<tr>
@@ -4736,7 +4736,7 @@ function renderChartHistory(){
     <td>${info.notes||'—'}</td>
   </tr>`).join('');
 
-  document.getElementById('chartHistory').innerHTML = `
+  (document.getElementById('chartHistory')||{}).innerHTML = `
     <div class="section-title" style="margin:20px 0 12px">Tooth Condition History</div>
     <div class="table-wrap"><div class="table-scroll">
       <table><thead><tr><th>Tooth</th><th>Condition</th><th>Updated</th><th>Notes</th></tr></thead>
@@ -4812,7 +4812,7 @@ function showBilling(q=''){
       </tr>`;
     }).join('') || `<tr><td colspan="9"><div class="empty"><div class="empty-icon">💰</div><p>${ql?'No results found':'No bills yet'}</p></div></td></tr>`;
 
-  document.getElementById('main').innerHTML = `
+  (document.getElementById('main')||{}).innerHTML = `
     <div class="section-header">
       <div class="section-title">Billing & Payments</div>
       <div class="btn-row">
@@ -4930,7 +4930,7 @@ function billAutoFillServices(patientId){
   const chips = recent
     .filter(a => { if(seen.has(a.type)) return false; seen.add(a.type); return true; })
     .map(a => `
-      <button type="button" onclick="document.getElementById('f_services').value='${a.type.replace(/'/g,"\\'")}';document.getElementById('apt_suggestions').querySelectorAll('button').forEach(b=>b.style.background='');this.style.background='var(--blue)';this.style.color='#fff';"
+      <button type="button" onclick="(document.getElementById('f_services')||{}).value='${a.type.replace(/'/g,"\\'")}';document.getElementById('apt_suggestions').querySelectorAll('button').forEach(b=>b.style.background='');this.style.background='var(--blue)';this.style.color='#fff';"
         style="padding:5px 12px;border-radius:20px;border:1.5px solid var(--blue);background:var(--sky);color:var(--blue);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s">
         ${a.type} <span style="font-size:10px;opacity:.7">${a.date||''}</span>
       </button>`).join('');
@@ -5099,10 +5099,10 @@ function recordPayment(id){
       <input class="form-control" id="f_pay_notes" placeholder="Optional note...">
     </div>
   `, ()=>{
-    const payAmt = parseFloat(document.getElementById('f_pay_amount').value||0);
-    const payDate = document.getElementById('f_pay_date').value;
-    const payMethod = document.getElementById('f_pay_method').value;
-    const payNotes = document.getElementById('f_pay_notes').value.trim();
+    const payAmt = parseFloat(document.getElementById('f_pay_amount')?.value||0);
+    const payDate = document.getElementById('f_pay_date')?.value;
+    const payMethod = document.getElementById('f_pay_method')?.value;
+    const payNotes = document.getElementById('f_pay_notes')?.value.trim();
 
     if(!payAmt || payAmt <= 0){ toast('Please enter a valid payment amount.'); return; }
     if(payAmt > remaining + 0.01){ toast(`Maximum payable is ${fmt(remaining)}`); return; }
@@ -5478,7 +5478,7 @@ function showInventory(){
     </tr>`;
   }).join('') || `<tr><td colspan="11"><div class="empty"><div class="empty-icon">📦</div><p>No items in inventory</p></div></td></tr>`;
 
-  document.getElementById('main').innerHTML = `
+  (document.getElementById('main')||{}).innerHTML = `
     <div class="section-header">
       <div class="section-title">Inventory & Supplies</div>
       <div class="btn-row">
@@ -5556,7 +5556,7 @@ function addStock(id){
       <input class="form-control" id="f_stock_add" type="number" min="1" value="1" style="font-size:18px;text-align:center;padding:12px">
     </div>`,
     ()=>{
-      const add = parseFloat(document.getElementById('f_stock_add').value||0);
+      const add = parseFloat(document.getElementById('f_stock_add')?.value||0);
       if(!add || add<=0){ toast('Enter a valid quantity'); return; }
       inv[id].quantity = String(parseFloat(item.quantity||0) + add);
       save(KEYS.inventory, inv, id);
@@ -6081,7 +6081,7 @@ async function showCloudBackups(){
 
 
     if(!allFolders.length){
-      document.getElementById('modalBody').innerHTML = `
+      (document.getElementById('modalBody')||{}).innerHTML = `
         <div style="text-align:center;padding:32px;color:var(--muted)">
           <div style="font-size:32px">📭</div>
           <div style="margin-top:8px;font-size:13px">No cloud backups found for your branch.</div>
@@ -6112,7 +6112,7 @@ async function showCloudBackups(){
     }
 
     if(!allFiles.length){
-      document.getElementById('modalBody').innerHTML = `
+      (document.getElementById('modalBody')||{}).innerHTML = `
         <div style="text-align:center;padding:32px;color:var(--muted)">
           <div style="font-size:32px">📭</div>
           <div style="margin-top:8px;font-size:13px">No backup files found in cloud storage.</div>
@@ -6138,14 +6138,14 @@ async function showCloudBackups(){
         </div>`;
     }).join('');
 
-    document.getElementById('modalBody').innerHTML = `
+    (document.getElementById('modalBody')||{}).innerHTML = `
       <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
         ${isAll ? 'Showing backups from all branches.' : 'Showing backups for your branch only.'}
       </div>
       ${rows}`;
 
   }catch(e){
-    document.getElementById('modalBody').innerHTML = `
+    (document.getElementById('modalBody')||{}).innerHTML = `
       <div style="text-align:center;padding:20px;color:var(--red)">❌ Failed to load cloud backups: ${e.message}</div>`;
   }
 }
@@ -6414,8 +6414,8 @@ function sendToMainBranch(){
     </div>
     <p style="font-size:11px;color:var(--muted);margin-top:4px">📎 A CSV file will download automatically. Send it to the main branch.</p>`,
     ()=>{
-      const branchName = document.getElementById('f_send_branch').value.trim();
-      const contact    = document.getElementById('f_send_contact').value.trim();
+      const branchName = document.getElementById('f_send_branch')?.value.trim();
+      const contact    = document.getElementById('f_send_contact')?.value.trim();
       if(!branchName){ toast('Branch name is required!'); return; }
       setBranchName(branchName);
       updateBranchBadge(branchName);
@@ -6826,7 +6826,7 @@ function showReports(filterBranch=null){
   const lastMonthRev = Object.values(bil).filter(b=>cleanDate(b.date).startsWith(lastMonthKey)).reduce((s,b)=>s+parseFloat(b.paid||0),0);
   const revGrowth    = lastMonthRev > 0 ? Math.round(((thisMonthRev-lastMonthRev)/lastMonthRev)*100) : 0;
 
-  document.getElementById('main').innerHTML = `
+  (document.getElementById('main')||{}).innerHTML = `
     <div class="section-header">
       <div class="section-title">📈 Reports & Analytics</div>
       <div class="btn-row">
@@ -7051,7 +7051,7 @@ function saveBranches(b){ DB.set(KEYS.branches, b); }
 
 function showMultiBranch(){
   // Show loading state first
-  document.getElementById('main').innerHTML = `
+  (document.getElementById('main')||{}).innerHTML = `
     <div class="section-header">
       <div class="section-title">Multi-Branch Overview</div>
     </div>
@@ -7179,7 +7179,7 @@ function _renderMultiBranch({ pts, apts, bil }){
     <p style="margin-top:8px">No branch data yet.</p>
   </div>`;
 
-  document.getElementById('main').innerHTML = `
+  (document.getElementById('main')||{}).innerHTML = `
     <div class="section-header">
       <div class="section-title">Multi-Branch Overview</div>
       <div class="btn-row">
@@ -7353,7 +7353,7 @@ function showBranchTab(tab, btn){
       <tbody>${rows}</tbody></table></div></div>`;
   }
 
-  document.getElementById('branchTabContent').innerHTML = html;
+  (document.getElementById('branchTabContent')||{}).innerHTML = html;
   setTimeout(initScrollHints, 100);
 }
 
@@ -7524,7 +7524,7 @@ function showBranchOverview(){
       </tr>`;
     }).join('') || `<tr><td colspan="8"><div class="empty"><p>No billing yet</p></div></td></tr>`;
 
-  document.getElementById('main').innerHTML = `
+  (document.getElementById('main')||{}).innerHTML = `
     <!-- Branch Header -->
     <div style="background:linear-gradient(135deg,var(--navy),var(--navy-2));border-radius:14px;padding:20px 24px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px">
       <div>
@@ -8413,7 +8413,7 @@ async function _compressPhoto(b64, size=80, q=0.4){
 // ── QR Scanner Page ───────────────────────────────────────────────────────────
 function showQRScanner(){
   _stopCam();
-  document.getElementById('main').innerHTML=`
+  (document.getElementById('main')||{}).innerHTML=`
     <div class="section-header">
       <div class="section-title">📷 QR Scanner → Excel</div>
       <div class="btn-row">
@@ -8498,7 +8498,7 @@ function _buildScanLog(){
 function processInput(){
   const val=document.getElementById('qrInput')?.value?.trim();
   if(!val)return;
-  document.getElementById('qrInput').value='';
+  (document.getElementById('qrInput')||{}).value='';
   document.getElementById('qrInput').focus();
   handleScan(val);
 }
@@ -9231,7 +9231,7 @@ function _renderCalendar(){
       </td>`;
     }).join('');
 
-    document.getElementById('main').innerHTML = `
+    (document.getElementById('main')||{}).innerHTML = `
       <div class="section-header">
         <div class="section-title" style="font-family:var(--font-serif)">&#128197; Appointment Calendar</div>
         <div class="btn-row">${dentistFilter}${navBtns}</div>
@@ -9337,7 +9337,7 @@ function _renderCalendar(){
         }).join('');
         const moreTag = dayApts.length > maxShow
           ? `<div style="font-size:10px;color:var(--blue);font-weight:700;cursor:pointer;padding:1px 4px"
-              onclick="window._calDaySelect='${ds}';document.getElementById('calViewMode').value='day';_renderCalendar()">
+              onclick="window._calDaySelect='${ds}';(document.getElementById('calViewMode')||{}).value='day';_renderCalendar()">
               +${dayApts.length-maxShow} more</div>`
           : '';
 
@@ -9361,7 +9361,7 @@ function _renderCalendar(){
       cells += '</tr>';
     }
 
-    document.getElementById('main').innerHTML = `
+    (document.getElementById('main')||{}).innerHTML = `
       <div class="section-header">
         <div class="section-title" style="font-family:var(--font-serif)">&#128197; Appointment Calendar</div>
         <div class="btn-row">${dentistFilter}${navBtns}</div>
@@ -9435,7 +9435,7 @@ function _renderCalendar(){
     }).join('')}
   </div>`;
 
-  document.getElementById('main').innerHTML = `
+  (document.getElementById('main')||{}).innerHTML = `
     <div class="section-header">
       <div class="section-title" style="font-family:var(--font-serif)">&#128197; Appointment Calendar</div>
       <div class="btn-row">${dentistFilter}${navBtns}</div>
@@ -9632,7 +9632,7 @@ function _renderQueue(){
       </select>
     </div>` : `<span style="background:var(--blue-pale);color:var(--blue);padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700">🏢 ${_queueBranch()}</span>`;
 
-  document.getElementById('main').innerHTML = `
+  (document.getElementById('main')||{}).innerHTML = `
     <div class="section-header">
       <div style="display:flex;align-items:center;gap:10px">
         <div class="section-title" style="font-family:var(--font-serif)">🪑 Patient Queue</div>
@@ -9822,11 +9822,11 @@ function _selectQueuePt(id, name, contact){
   const sel = document.getElementById('wq_selected');
   if(sel){
     sel.style.display = 'flex';
-    document.getElementById('wq_selected_name').textContent = name;
+    (document.getElementById('wq_selected_name')||{}).textContent = name;
   }
-  document.getElementById('wq_search').value = name;
+  (document.getElementById('wq_search')||{}).value = name;
   document.getElementById('wq_pt_results').style.display = 'none';
-  document.getElementById('wq_walkin_name').value = '';
+  (document.getElementById('wq_walkin_name')||{}).value = '';
 }
 
 function _clearQueuePtSel(){
@@ -9900,7 +9900,7 @@ async function showChat(){ _chatUnread=0; buildNav();
     if(r.ok){ const rows = await r.json(); rows.forEach(x=>{ unreadMap[x.from_user]=(unreadMap[x.from_user]||0)+1; }); }
   }catch(e){}
 
-  document.getElementById('main').innerHTML = `
+  (document.getElementById('main')||{}).innerHTML = `
 <div style="max-width:680px;margin:0 auto">
   <div class="section-header"><div class="section-title">💬 Messages</div></div>
   <div id="_chatList" style="background:var(--white);border-radius:var(--radius);border:1px solid var(--border);overflow:hidden;box-shadow:var(--shadow)">
@@ -9940,7 +9940,7 @@ async function _openChat(username, name, branch){
   _chatMessages = [];
   document.getElementById('_chatList').style.display = 'none';
   document.getElementById('_chatPane').style.display = 'flex';
-  document.getElementById('_chatPaneName').textContent = name + ' • ' + branch;
+  (document.getElementById('_chatPaneName')||{}).textContent = name + ' • ' + branch;
   const _cl=document.getElementById('_chatLogo'); if(_cl&&typeof _DC_LOGO_SIDEBAR!=='undefined') _cl.src=_DC_LOGO_SIDEBAR;
   _renderChat();
 
