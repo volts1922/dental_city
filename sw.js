@@ -1,4 +1,4 @@
-const CACHE_VER = 'dental-city-clinic-v51';
+const CACHE_VER = 'dental-city-clinic-v52';
 const urlsToCache = [
   '/dental_city/',
   '/dental_city/index.html',
@@ -7,6 +7,10 @@ const urlsToCache = [
   'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js',
   'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap',
 ];
+
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
+});
 
 self.addEventListener('install', event => {
   event.waitUntil(
@@ -48,7 +52,7 @@ self.addEventListener('fetch', event => {
           caches.open(CACHE_VER).then(cache => cache.put(request, cloned));
           return res;
         })
-        .catch(() => caches.match('/index.html'))
+        .catch(() => caches.match('/dental_city/index.html'))
       )
   );
 });
