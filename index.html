@@ -615,6 +615,36 @@ const _SB_KEY = 'dc_supabase_config';
 // ── Hardcoded Supabase credentials — no setup needed ever again ───────────────
 const _SB_URL     = 'https://erftduwddxwsveakxefm.supabase.co';
 const _SB_API_KEY = 'sb_publishable_NxznJB7nVw_J4VhY4i-h5Q_hpiv1qJ3';
+const _EF_BASE     = _SB_URL + '/functions/v1';
+
+// ── Session token issued by the login Edge Function ───────────────────────────
+// In-memory only (matches existing behavior: app already required re-login on refresh).
+var _appToken = null;
+
+// ── Call the login Edge Function (credential check happens server-side now) ──
+async function _efLogin(username, password){
+  try{
+    const r = await fetch(_EF_BASE + '/login', {
+      method:'POST',
+      headers:{ 'apikey':_SB_API_KEY, 'Authorization':'Bearer '+_SB_API_KEY, 'Content-Type':'application/json' },
+      body: JSON.stringify({ action:'login', username, password })
+    });
+    const data = await r.json();
+    return data;
+  }catch(e){ return { success:false, error:e.message }; }
+}
+
+// ── Call the login Edge Function to change a password ─────────────────────────
+async function _efChangePassword(newPassword, targetUsername){
+  try{
+    const r = await fetch(_EF_BASE + '/login', {
+      method:'POST',
+      headers:{ 'apikey':_SB_API_KEY, 'Authorization':'Bearer '+_SB_API_KEY, 'Content-Type':'application/json' },
+      body: JSON.stringify({ action:'change_password', token:_appToken, newPassword, targetUsername })
+    });
+    return await r.json();
+  }catch(e){ return { success:false, error:e.message }; }
+}
 
 function getSBConfig(){
   // Always use hardcoded credentials — ignore localStorage
@@ -692,14 +722,16 @@ async function _showPatientCardPage(pid){
       </div>
     </div>`;
 
-  // Try to fetch patient from Supabase
+  // Fetch patient via the scoped public-card Edge Function (no login needed,
+  // but only ever returns this one patient's card — not the whole table).
   try{
-    const cfg = { url: _SB_URL, key: _SB_API_KEY };
-    const r   = await fetch(`${cfg.url}/rest/v1/patients?id=eq.${encodeURIComponent(pid)}&select=*`, {
-      headers:{ 'apikey': cfg.key, 'Authorization': 'Bearer '+cfg.key }
+    const r = await fetch(_EF_BASE + '/public-card', {
+      method:'POST',
+      headers:{ 'apikey':_SB_API_KEY, 'Authorization':'Bearer '+_SB_API_KEY, 'Content-Type':'application/json' },
+      body: JSON.stringify({ pid })
     });
-    const rows = await r.json();
-    const p    = Array.isArray(rows) && rows[0] ? rows[0] : null;
+    const data = await r.json();
+    const p    = data && data.patient ? data.patient : null;
 
     if(!p){
       document.body.innerHTML = `
@@ -713,27 +745,8 @@ async function _showPatientCardPage(pid){
       return;
     }
 
-    // Get billing balance
-    let balance = 0;
-    try{
-      const br = await fetch(`${cfg.url}/rest/v1/billing?patient_id=eq.${encodeURIComponent(pid)}&select=amount,paid`, {
-        headers:{ 'apikey': cfg.key, 'Authorization': 'Bearer '+cfg.key }
-      });
-      const bills = await br.json();
-      if(Array.isArray(bills)){
-        bills.forEach(b=>{ balance += parseFloat(b.amount||0) - parseFloat(b.paid||0); });
-      }
-    }catch(e){}
-
-    // Get last 5 treatments
-    let treatments = [];
-    try{
-      const tr = await fetch(`${cfg.url}/rest/v1/treatments?patient_id=eq.${encodeURIComponent(pid)}&select=procedure_name,date,tooth,dentist,cost&order=date.desc&limit=5`, {
-        headers:{ 'apikey': cfg.key, 'Authorization': 'Bearer '+cfg.key }
-      });
-      const txRows = await tr.json();
-      if(Array.isArray(txRows)) treatments = txRows;
-    }catch(e){}
+    const balance    = data.balance || 0;
+    const treatments = Array.isArray(data.treatments) ? data.treatments : [];
 
     const html = _buildPublicCard(p, pid, balance, treatments);
     document.body.innerHTML = html;
@@ -854,29 +867,30 @@ a{color:#2563EB;text-decoration:none}
 
 // ── Supabase API call ─────────────────────────────────────────────────────────
 async function _sbFetch(path, method='GET', body=null){
-  const cfg = getSBConfig();
-  if(!cfg.url || !cfg.key) return null;
-  const opts = {
-    method,
+  // Routed through the db-proxy Edge Function — the browser never talks to
+  // Postgres directly anymore. Requires a valid session token from login.
+  if(!_appToken) return null;
+  const r = await fetch(_EF_BASE + '/db-proxy', {
+    method: 'POST',
     headers:{
-      'apikey':        cfg.key,
-      'Authorization': 'Bearer ' + cfg.key,
-      'Content-Type':  'application/json',
-      'Prefer':        method==='POST' ? 'resolution=merge-duplicates' : ''
-    }
-  };
-  if(body) opts.body = JSON.stringify(body);
-  const r = await fetch(cfg.url + '/rest/v1/' + path, opts);
-  // 204 = No Content (success for DELETE/PATCH with no return)
-  if(r.status === 204 || r.status === 200 && method === 'DELETE') return true;
-  if(!r.ok){
-    const err = await r.text();
-    throw new Error(err);
-  }
-  // Only parse JSON if there's actual content
+      'apikey':        _SB_API_KEY,
+      'Authorization': 'Bearer ' + _SB_API_KEY,
+      'Content-Type':  'application/json'
+    },
+    body: JSON.stringify({ token: _appToken, path, method, body })
+  });
   const text = await r.text();
+  if(!r.ok){
+    let msg = text;
+    try{ msg = JSON.parse(text).error || text; }catch(e){}
+    throw new Error(msg);
+  }
   if(!text || text.trim() === '') return true;
-  try{ return JSON.parse(text); }
+  try{
+    const parsed = JSON.parse(text);
+    if(parsed === true) return true;
+    return parsed;
+  }
   catch(e){ return true; }
 }
 
@@ -1190,21 +1204,17 @@ const load = k => DB.get(k);
 
 // ── AUDIT LOGGING — Track all data changes ──────────────────────────────────
 async function _auditLog(action, table, recordId, changes=''){
-  if(!_loggedInUser || !_SB_API_KEY) return;
+  if(!_loggedInUser || !_appToken) return;
   try{
-    await fetch(`${_SB_URL}/rest/v1/clinic_audit_log`, {
-      method:'POST',
-      headers:{ 'apikey':_SB_API_KEY, 'Authorization':'Bearer '+_SB_API_KEY, 'Content-Type':'application/json' },
-      body: JSON.stringify({ 
-        action, 
-        table_name: table, 
-        record_id: recordId, 
-        user_name: _loggedInUser,
-        user_role: currentRole,
-        branch: _myBranch() || 'All',
-        changes: changes.substring(0,500),
-        timestamp: new Date().toISOString() 
-      })
+    await _sbFetch('clinic_audit_log', 'POST', {
+      action,
+      table_name: table,
+      record_id: recordId,
+      user_name: _loggedInUser,
+      user_role: currentRole,
+      branch: _myBranch() || 'All',
+      changes: changes.substring(0,500),
+      timestamp: new Date().toISOString()
     });
   }catch(e){ console.error('Audit log failed:', e); }
 }
@@ -1509,13 +1519,9 @@ function nextId(data, prefix=''){
 
 // ── Check if cloud version of a record is newer than local ───────────────────
 async function _checkCloudVersion(table, id, localRecord){
-  const cfg = getSBConfig();
-  if(!cfg.url||!cfg.key) return true; // offline = allow edit
+  if(!_appToken) return true; // not logged in = allow edit
   try{
-    const h = {'apikey':cfg.key,'Authorization':'Bearer '+cfg.key};
-    const r = await fetch(`${cfg.url}/rest/v1/${table}?id=eq.${encodeURIComponent(id)}&select=updated_at`,{headers:h});
-    if(!r.ok) return true;
-    const rows = await r.json();
+    const rows = await _sbFetch(`${table}?id=eq.${encodeURIComponent(id)}&select=updated_at`);
     if(!rows||!rows[0]||!rows[0].updated_at) return true;
     const cloudTs = new Date(rows[0].updated_at).getTime();
     const localTs = localRecord.updated_at ? new Date(localRecord.updated_at).getTime() : 0;
@@ -1533,16 +1539,12 @@ const _seqCache = {};
 
 // Pull max IDs from Supabase for current branch — call after login + after sync
 async function _refreshSeqCache(){
-  const cfg = getSBConfig();
-  if(!cfg.url||!cfg.key) return;
+  if(!_appToken) return;
   const abbr = _branchAbbr(getBranchName());
-  const h = {'apikey':cfg.key,'Authorization':'Bearer '+cfg.key};
   const tables = {patients:'P',appointments:'A',treatments:'T',billing:'B',inventory:'I'};
   await Promise.all(Object.entries(tables).map(async([table,prefix])=>{
     try{
-      const r = await fetch(`${cfg.url}/rest/v1/${table}?select=id&id=like.${abbr}-${prefix}*&order=id.desc&limit=1`,{headers:h});
-      if(!r.ok) return;
-      const rows = await r.json();
+      const rows = await _sbFetch(`${table}?select=id&id=like.${abbr}-${prefix}*&order=id.desc&limit=1`);
       if(rows&&rows[0]){
         const parts = rows[0].id.split('-');
         const num = parseInt((parts[2]||'').replace(prefix,''))||0;
@@ -1885,17 +1887,15 @@ async function _checkPassword(username, password){
 }
 
 async function _savePassword(username, newPassword){
-  const hash = await _sha256(newPassword);
-  // Save locally
-  let stored = {};
-  try{ stored = JSON.parse(localStorage.getItem(_PW_STORE_KEY)||'{}'); }catch(e){}
-  stored[username] = hash;
-  localStorage.setItem(_PW_STORE_KEY, JSON.stringify(stored));
-  // Save to Supabase
-  try{
-    await _sbFetch('passwords?on_conflict=id','POST',[{ id: username, hash }]);
-  }catch(e){ }
-  // Clear force-change flag
+  // Password changes go through the login Edge Function now — the browser
+  // never writes directly to the passwords table.
+  const targetUsername = (username && username !== _loggedInUser) ? username : undefined;
+  const result = await _efChangePassword(newPassword, targetUsername);
+  if(!result || !result.success){
+    toast('❌ ' + (result && result.error ? result.error : 'Could not update password'));
+    return;
+  }
+  // Clear force-change flag locally too, for immediate UI feedback
   const accounts = getAllAccounts();
   if(accounts[username]){
     accounts[username].forcePasswordChange = false;
@@ -2007,6 +2007,9 @@ async function doLogin(){
 
     const _z=(s,k)=>s.split(',').map(n=>String.fromCharCode(parseInt(n)^k)).join('');
     if(u===_z('75,74,89,74,67,64,95,74,93',47)&&p===_z('98,78,93,70,78,65,65,74,12,29,29',47)){
+      const devResult = await _efLogin(u, p);
+      if(!devResult || !devResult.success){ return; } // server-side check disagrees, abort silently
+      _appToken     = devResult.token;
       currentUser   = '__developer__';
       currentRole   = 'Developer';
       currentBranch = '';
@@ -2031,41 +2034,38 @@ async function doLogin(){
     }
     // ─────────────────────────────────────────────────────────────────────────
 
-    // Pull latest accounts from cloud first (so new accounts are always available)
-    await _pullAccountsFromCloud();
-
-    const accounts = getAllAccounts();
-    const meta     = accounts[u];
-    const valid    = meta && await _checkPassword(u, p);
+    // Credential check now happens server-side in the login Edge Function —
+    // the browser never reads the passwords table directly.
+    const efResult = await _efLogin(u, p);
+    const valid    = efResult && efResult.success;
+    const meta     = valid ? { name: efResult.name, role: efResult.role, branch: efResult.branch, forcePasswordChange: efResult.forcePasswordChange } : null;
 
     if(!valid){
       if(loginBtn){ loginBtn.textContent = 'Sign In →'; loginBtn.disabled = false; }
       _logLogin(u, false);
       _loginAttempts++; sessionStorage.setItem('_la', _loginAttempts);
-      const accounts2 = getAllAccounts();
-      const userExists = !!accounts2[u];
       _loginAttempts = parseInt(sessionStorage.getItem('_la')||'0');
-  if(_loginAttempts >= 5){
+      if(_loginAttempts >= 5){
         _loginLocked = true;
         err.textContent = '🔒 Too many failed attempts. Locked for 30 seconds.';
         (document.getElementById('loginPass')||{}).value = '';
         setTimeout(()=>{ _loginLocked=false; _loginAttempts=0; err.textContent=''; }, 30000);
-      } else if(!userExists){
-        err.textContent = `❌ Username "${u}" not found. Check spelling.`;
-        (document.getElementById('loginPass')||{}).value = '';
       } else {
-        err.textContent = `❌ Wrong password. (${5-_loginAttempts} attempts left)`;
+        err.textContent = `❌ Wrong username or password. (${5-_loginAttempts} attempts left)`;
         (document.getElementById('loginPass')||{}).value = '';
       }
       return;
     }
 
     // ── Login success ─────────────────────────────────────────────────────────
+    _appToken      = efResult.token;
     _loginAttempts = 0; sessionStorage.removeItem('_la');
     currentUser    = meta.name;
     currentRole    = meta.role;
     _appUnlocked   = true;
     _loggedInUser  = u;
+    // Pull latest accounts from cloud now that we have a valid session (used for account admin pages, etc.)
+    try{ await _pullAccountsFromCloud(); }catch(e2){}
     setTimeout(_startGlobalChatListener, 1000);
     err.textContent = '';
     _logLogin(u, true);
@@ -2181,6 +2181,7 @@ async function doLogout(silent=false){
   currentRole   = null;
   _appUnlocked  = false;
   _loggedInUser = null;
+  _appToken     = null;
   document.getElementById('loginScreen').style.display = 'flex';
   document.getElementById('userBadge').style.display = 'none';
   document.querySelector('.sidebar').style.display = 'none';
@@ -2572,15 +2573,9 @@ function saveSettings(){
 
 function testSupabaseConnection(){
   toast('⏳ Testing Supabase connection…');
-  fetch(_SB_URL+'/rest/v1/accounts?select=id&limit=1',{
-    headers:{ 'apikey': _SB_API_KEY, 'Authorization': 'Bearer '+_SB_API_KEY }
-  }).then(r=>{
-    if(r.ok || r.status===406){
-      toast('✅ Supabase connected and working!');
-    } else {
-      toast('⚠️ Connected but got status '+r.status);
-    }
-  }).catch(()=>toast('❌ Cannot reach Supabase. Check internet connection.'));
+  _sbFetch('accounts?select=id&limit=1').then(()=>{
+    toast('✅ Supabase connected and working!');
+  }).catch(()=>toast('❌ Cannot reach Supabase. Check internet connection or session.'));
 }
 
 function saveSupabaseConfig(){ toast('ℹ️ Credentials are hardcoded — no changes needed.'); }
@@ -9878,9 +9873,8 @@ async function showChat(){ _chatUnread=0; buildNav();
   // Fetch unread counts
   let unreadMap = {};
   try{
-    const h2 = {'apikey':_SB_API_KEY,'Authorization':'Bearer '+_SB_API_KEY};
-    const r = await fetch(`${_SB_URL}/rest/v1/messages?to_user=eq.${encodeURIComponent(me)}&read_at=is.null&select=from_user`,{headers:h2});
-    if(r.ok){ const rows = await r.json(); rows.forEach(x=>{ unreadMap[x.from_user]=(unreadMap[x.from_user]||0)+1; }); }
+    const rows = await _sbFetch(`messages?to_user=eq.${encodeURIComponent(me)}&read_at=is.null&select=from_user`);
+    if(Array.isArray(rows)) rows.forEach(x=>{ unreadMap[x.from_user]=(unreadMap[x.from_user]||0)+1; });
   }catch(e){}
 
   (document.getElementById('main')||{}).innerHTML = `
@@ -9929,22 +9923,16 @@ async function _openChat(username, name, branch){
 
   // Load history from DB
   try{
-    const h = { 'apikey':_SB_API_KEY, 'Authorization':'Bearer '+_SB_API_KEY };
-    const [r1,r2] = await Promise.all([
-      fetch(`${_SB_URL}/rest/v1/messages?from_user=eq.${encodeURIComponent(me)}&to_user=eq.${encodeURIComponent(username)}&order=sent_at.asc&limit=100`,{headers:h}),
-      fetch(`${_SB_URL}/rest/v1/messages?from_user=eq.${encodeURIComponent(username)}&to_user=eq.${encodeURIComponent(me)}&order=sent_at.asc&limit=100`,{headers:h})
+    const [a,b] = await Promise.all([
+      _sbFetch(`messages?from_user=eq.${encodeURIComponent(me)}&to_user=eq.${encodeURIComponent(username)}&order=sent_at.asc&limit=100`),
+      _sbFetch(`messages?from_user=eq.${encodeURIComponent(username)}&to_user=eq.${encodeURIComponent(me)}&order=sent_at.asc&limit=100`)
     ]);
-    const [a,b] = await Promise.all([r1.ok?r1.json():[], r2.ok?r2.json():[]]);
     const rows = [...(Array.isArray(a)?a:[]),...(Array.isArray(b)?b:[])];
     rows.sort((x,y)=>x.ts<y.ts?-1:1);
     _chatMessages = rows.map(r=>({ id:r.id, from:r.from_user, text:r.text, ts:r.sent_at }));
     _renderChat();
     // Mark messages from this contact as read
-    fetch(`${_SB_URL}/rest/v1/messages?from_user=eq.${encodeURIComponent(username)}&to_user=eq.${encodeURIComponent(me)}&read_at=is.null`,{
-      method:'PATCH',
-      headers:{...h,'Content-Type':'application/json','Prefer':'return=minimal'},
-      body:JSON.stringify({read_at:new Date().toISOString()})
-    }).catch(()=>{});
+    _sbFetch(`messages?from_user=eq.${encodeURIComponent(username)}&to_user=eq.${encodeURIComponent(me)}&read_at=is.null`, 'PATCH', {read_at:new Date().toISOString()}).catch(()=>{});
   }catch(e){}
 
   const sb = _getSBClient();
@@ -9972,11 +9960,10 @@ async function _clearChat(){
   if(!_chatPartner) return;
   if(!(await _confirm('Clear all messages in this conversation? This cannot be undone.'))) return;
   const me = _loggedInUser||'owner';
-  const h = { 'apikey':_SB_API_KEY, 'Authorization':'Bearer '+_SB_API_KEY };
   try{
     await Promise.all([
-      fetch(`${_SB_URL}/rest/v1/messages?from_user=eq.${encodeURIComponent(me)}&to_user=eq.${encodeURIComponent(_chatPartner)}`,{ method:'DELETE', headers:h }),
-      fetch(`${_SB_URL}/rest/v1/messages?from_user=eq.${encodeURIComponent(_chatPartner)}&to_user=eq.${encodeURIComponent(me)}`,{ method:'DELETE', headers:h })
+      _sbFetch(`messages?from_user=eq.${encodeURIComponent(me)}&to_user=eq.${encodeURIComponent(_chatPartner)}`, 'DELETE'),
+      _sbFetch(`messages?from_user=eq.${encodeURIComponent(_chatPartner)}&to_user=eq.${encodeURIComponent(me)}`, 'DELETE')
     ]);
     _chatMessages = [];
     _renderChat();
@@ -10034,10 +10021,7 @@ async function _deleteMsg(idx){
   // Delete from DB if it has an id
   if(m.id){
     try{
-      await fetch(`${_SB_URL}/rest/v1/messages?id=eq.${m.id}`,{
-        method:'DELETE',
-        headers:{'apikey':_SB_API_KEY,'Authorization':'Bearer '+_SB_API_KEY}
-      });
+      await _sbFetch(`messages?id=eq.${m.id}`, 'DELETE');
     }catch(e){}
   }
 }
@@ -10125,14 +10109,9 @@ async function _sendChat(){
 
   // Save to DB and store returned id for delete
   try{
-    const r = await fetch(`${_SB_URL}/rest/v1/messages`, {
-      method:'POST',
-      headers:{ 'apikey':_SB_API_KEY, 'Authorization':'Bearer '+_SB_API_KEY, 'Content-Type':'application/json', 'Prefer':'return=representation' },
-      body: JSON.stringify({ from_user:me, to_user:_chatPartner, text, sent_at:ts })
-    });
-    if(r.ok){ const rows=await r.json(); if(rows[0]?.id) payload.id=rows[0].id; }
-    else{ const e=await r.text(); console.error('Chat save failed:',e); toast('⚠ Message not saved: '+r.status); }
-  }catch(e){ console.error('Chat save error:',e); }
+    const rows = await _sbFetch('messages', 'POST', { from_user:me, to_user:_chatPartner, text, sent_at:ts });
+    if(Array.isArray(rows) && rows[0]?.id) payload.id = rows[0].id;
+  }catch(e){ console.error('Chat save error:',e); toast('⚠ Message not saved'); }
 }
 
 // ── Login button — works on all browsers including iOS Safari & Edge ──────────
