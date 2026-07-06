@@ -4101,13 +4101,18 @@ async function _showIntakeFormPage(presetBranch){
   const loginScreen = document.getElementById('loginScreen');
   if(loginScreen) loginScreen.style.display = 'none';
 
+  const logoSrc = (typeof _DC_LOGO_SIDEBAR!=='undefined' && _DC_LOGO_SIDEBAR) ? _DC_LOGO_SIDEBAR : '';
+
   document.body.innerHTML = `
-    <div style="min-height:100vh;background:#EFF6FF;padding:24px 16px;font-family:-apple-system,BlinkMacSystemFont,sans-serif">
-      <div style="max-width:420px;margin:0 auto;background:#fff;border-radius:14px;box-shadow:0 4px 20px rgba(11,61,110,0.1);padding:24px">
+    <div style="min-height:100vh;background:var(--blue-pale);padding:24px 16px;font-family:-apple-system,BlinkMacSystemFont,sans-serif">
+      <div style="max-width:420px;margin:0 auto;background:var(--white);border-radius:var(--radius);box-shadow:var(--shadow);padding:24px;border-top:4px solid var(--accent)">
         <div style="text-align:center;margin-bottom:16px">
-          <div style="font-size:36px">🦷</div>
-          <h2 style="margin:8px 0 0;color:#0B3D6E;font-size:18px">New Patient Form</h2>
-          <p style="font-size:12px;color:#64748B;margin-top:4px">Please fill this out before your visit</p>
+          ${logoSrc
+            ? `<img src="${logoSrc}" style="width:64px;height:64px;object-fit:contain;margin:0 auto;display:block" onerror="this.style.display='none';document.getElementById('_intakeLogoFallback').style.display='block'">
+               <div id="_intakeLogoFallback" style="display:none;font-size:36px">🦷</div>`
+            : `<div style="font-size:36px">🦷</div>`}
+          <h2 style="margin:8px 0 0;color:var(--navy);font-size:18px;font-family:var(--font-serif)">New Patient Form</h2>
+          <p style="font-size:12px;color:var(--muted);margin-top:4px">Please fill this out before your visit</p>
         </div>
         <div id="intakeFormBody">
           <div class="form-group"><label class="form-label">Which Branch? *</label>
@@ -4194,8 +4199,8 @@ async function _submitIntake(){
     document.getElementById('intakeFormBody').innerHTML = `
       <div style="text-align:center;padding:20px 0">
         <div style="font-size:40px">✅</div>
-        <p style="font-size:14px;color:#16A34A;font-weight:700;margin-top:8px">Thank you!</p>
-        <p style="font-size:12px;color:#64748B;margin-top:4px">Your requested schedule (${_esc(prefDate)}${prefTime?' '+_esc(prefTime):''}) has been sent to ${_esc(branch)}. They'll confirm with you shortly.</p>
+        <p style="font-size:14px;color:var(--green);font-weight:700;margin-top:8px">Thank you!</p>
+        <p style="font-size:12px;color:var(--muted);margin-top:4px">Your requested schedule (${_esc(prefDate)}${prefTime?' '+_esc(prefTime):''}) has been sent to ${_esc(branch)}. They'll confirm with you shortly.</p>
       </div>`;
   }catch(e){
     toast('❌ ' + e.message);
@@ -9216,7 +9221,7 @@ if('serviceWorker' in navigator){
 
   async function _registerSW(){
     // Do NOT unregister — let SW update flow naturally so banner can show
-    return navigator.serviceWorker.register('./sw.js?v=56', {updateViaCache:'none', scope:'./'});
+    return navigator.serviceWorker.register('./sw.js?v=57', {updateViaCache:'none', scope:'./'});
   }
 
   function _setupReg(reg){
