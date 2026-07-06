@@ -1,98 +1,57 @@
-// DC PAYROLL SERVICE WORKER v43
-// Fixed ghost employees: removed unsafe employees_201 auto-merge in loadAtt()
-
-const CACHE_VERSION = 'dental-city-payroll-v43-time';
-const CACHE_NAME = CACHE_VERSION;
-
-// Files to cache
+const CACHE_VER = 'dental-city-clinic-v55';
 const urlsToCache = [
-  '/dental_city_payroll/',
-  '/dental_city_payroll/index.html',
-  '/dental_city_payroll/manifest.json'
+  './',
+  './index.html',
+  'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js',
+  'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js',
+  'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap',
 ];
 
-// Install event - cache files
-self.addEventListener('install', (event) => {
-  console.log('[SW] Installing...');
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log('[SW] Caching app shell');
-      return cache.addAll(urlsToCache).catch(e => {
-        console.warn('[SW] Cache addAll failed (expected for offline install):', e);
-      });
-    })
-  );
-  self.skipWaiting();
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
 
-// Activate event - clean old caches
-self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating...');
+self.addEventListener('install', event => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (!cacheName.includes('v43')) {
-            console.log('[SW] Deleting old cache:', cacheName);
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
+    caches.open(CACHE_VER)
+      .then(cache => cache.addAll(urlsToCache))
+      .then(() => self.skipWaiting())
+      .catch(err => console.log('Cache install error:', err))
   );
-  self.clients.claim();
 });
 
-// Fetch event - network first, cache fallback
-self.addEventListener('fetch', (event) => {
-  // Skip non-GET requests
-  if (event.request.method !== 'GET') {
-    return;
-  }
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys()
+      .then(versions => Promise.all(
+        versions
+          .filter(v => v !== CACHE_VER)
+          .map(v => caches.delete(v))
+      ))
+      .then(() => self.clients.claim())
+  );
+});
 
-  // Skip non-http(s) requests
-  if (!event.request.url.startsWith('http')) {
+self.addEventListener('fetch', event => {
+  const { request } = event;
+  const url = new URL(request.url);
+
+  // Skip cross-origin and non-GET
+  if (url.origin !== location.origin && !url.hostname.includes('cdnjs') && !url.hostname.includes('googleapis') && !url.hostname.includes('unpkg')) {
     return;
   }
+  if (request.method !== 'GET') return;
 
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        // Don't cache if not ok
-        if (!response || response.status !== 200) {
-          return response;
-        }
-
-        // Clone response BEFORE using it
-        const responseToCache = response.clone();
-
-        // Cache the response
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache).catch(e => {
-            // Silently fail cache put
-          });
-        });
-
-        return response;
-      })
-      .catch(() => {
-        // Return cached version if offline
-        return caches.match(event.request).then((response) => {
-          return response || new Response('Offline - cached version not available', {
-            status: 503,
-            statusText: 'Service Unavailable',
-            headers: new Headers({'Content-Type': 'text/plain'})
-          });
-        });
-      })
+    caches.match(request)
+      .then(response => response || fetch(request)
+        .then(res => {
+          if (!res || res.status !== 200 || res.type === 'error') return res;
+          const cloned = res.clone();
+          caches.open(CACHE_VER).then(cache => cache.put(request, cloned));
+          return res;
+        })
+        .catch(() => caches.match('./index.html'))
+      )
   );
 });
-
-// Handle messages
-self.addEventListener('message', (event) => {
-  if (event.data && event.data.type === 'SKIP_WAITING') {
-    self.skipWaiting();
-  }
-});
-
-console.log('[SW] Service Worker loaded v32');
