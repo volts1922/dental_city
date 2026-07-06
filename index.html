@@ -1416,6 +1416,11 @@ async function checkPendingIntakeNotifs(){
     if(!seeAll && myBranch) path += '&branch=eq.' + encodeURIComponent(myBranch);
     const rows = await _sbFetch(path);
     const list = Array.isArray(rows) ? rows : [];
+
+    // Red badge on the "Patient Requests" sidebar item — cleared when the page is opened
+    _intakeUnread = list.length;
+    buildNav();
+
     if(list.length){
       const names = list.slice(0,3).map(r=>r.name).join(', ');
       const extra = list.length > 3 ? ` +${list.length-3} more` : '';
@@ -3164,6 +3169,7 @@ const NAV_STAFF = [..._NAV_BASE,
 
 let currentPage = '';
 let _chatUnread = 0;
+let _intakeUnread = 0;
 function buildNav(){
   const nav = document.getElementById('nav');
   const items = isOwner() ? NAV_OWNER : isAdmin() ? NAV_ADMIN : NAV_STAFF;
@@ -3171,6 +3177,7 @@ function buildNav(){
     <div class="nav-item${currentPage===n.label?' active':''}" onclick="navigate('${n.label}','${n.fn}')" style="position:relative">
       <span class="icon">${n.icon}</span>${n.label}
       ${n.label==='Chat'&&_chatUnread>0?'<span class="_chatBadge" style="position:absolute;top:4px;right:4px;width:9px;height:9px;background:#e53e3e;border-radius:50%;border:2px solid var(--navy)"></span>':''}
+      ${n.label==='Patient Requests'&&_intakeUnread>0?'<span class="_intakeBadge" style="position:absolute;top:4px;right:4px;width:9px;height:9px;background:#e53e3e;border-radius:50%;border:2px solid var(--navy)"></span>':''}
     </div>`).join('');
 }
 function navigate(label, fn, arg){
@@ -3939,6 +3946,7 @@ function exportPhilHealthClaimsCSV() {
 let _pendingIntake = [];
 
 async function showPendingIntake(){
+  _intakeUnread = 0; buildNav();
   (document.getElementById('main')||{}).innerHTML = `
     <div class="section-header">
       <div class="section-title">🆕 Patient Requests</div>
@@ -3973,7 +3981,7 @@ async function showPendingIntake(){
 
   wrap.innerHTML = `<div class="table-wrap"><div class="table-scroll">
     <table><thead><tr>
-      <th>Submitted</th><th>Name</th><th>Age/Gender</th><th>Contact</th><th>Branch</th><th>Notes</th><th>Actions</th>
+      <th>Submitted</th><th>Name</th><th>Age/Gender</th><th>Contact</th><th>Branch</th><th>Procedure Needed</th><th>Requested Date/Time</th><th>Notes</th><th>Actions</th>
     </tr></thead><tbody>
       ${_pendingIntake.map(r=>`<tr>
         <td>${(r.submitted_at||'').slice(0,16).replace('T',' ')}</td>
@@ -3981,6 +3989,8 @@ async function showPendingIntake(){
         <td>${_esc(r.age||'—')} / ${_esc(r.gender||'—')}</td>
         <td>${_esc(r.contact||'—')}${r.email?'<br><span style="font-size:11px;color:var(--muted)">'+_esc(r.email)+'</span>':''}</td>
         <td>${_esc(r.branch||'—')}</td>
+        <td>${r.procedure ? `<span class="badge badge-blue">${_esc(r.procedure)}</span>` : '<span style="color:var(--muted);font-size:11px">General / Not sure</span>'}</td>
+        <td style="font-weight:600;white-space:nowrap">${r.preferred_date ? `📅 ${_esc(r.preferred_date)}${r.preferred_time?' '+_esc(r.preferred_time):''}` : '<span style="color:var(--muted);font-size:11px">—</span>'}</td>
         <td style="max-width:220px;font-size:11px;color:var(--muted)">
           ${r.medical_history?'🩺 '+_esc(r.medical_history).slice(0,80):''}
           ${r.allergies?'<br>⚠️ '+_esc(r.allergies).slice(0,60):''}
@@ -3997,7 +4007,9 @@ async function showPendingIntake(){
 async function approveIntake(id){
   const r = _pendingIntake.find(x=>x.id===id);
   if(!r){ toast('❌ Request not found — try refreshing'); return; }
-  if(!(await _confirm(`Create a patient record for "${r.name}"?`))) return;
+  const procNote = r.procedure ? `\nRequested procedure: ${r.procedure}` : '';
+  const whenNote = r.preferred_date ? `\nRequested date/time: ${r.preferred_date}${r.preferred_time?' '+r.preferred_time:''}` : '';
+  if(!(await _confirm(`Create a patient record for "${r.name}"?${procNote}${whenNote}`))) return;
 
   try{
     const pts = load(KEYS.patients);
@@ -4009,14 +4021,40 @@ async function approveIntake(id){
       philhealth_has: false, philhealth_member_id: '', xrays: []
     };
     save(KEYS.patients, pts, newId);
-    _auditLog('CREATE', 'patients', newId, `Approved self-intake: ${r.name}`);
+    _auditLog('CREATE', 'patients', newId, `Approved self-intake: ${r.name}${r.procedure?' ('+r.procedure+')':''}`);
 
     await _sbFetch(`patient_intake?id=eq.${encodeURIComponent(id)}`, 'PATCH', { status:'approved' });
     toast(`✅ Patient added as ${newId}`);
     showPendingIntake();
+
+    if(await _confirm(`Schedule their appointment now?${r.procedure?`\n\n"${r.procedure}" will be pre-filled as the procedure.`:''}${r.preferred_date?`\nRequested: ${r.preferred_date}${r.preferred_time?' '+r.preferred_time:''}`:''}`)){
+      _scheduleApptFor(newId, r.procedure, r.preferred_date, r.preferred_time);
+    }
   }catch(e){
     toast('❌ Error approving: ' + e.message);
   }
+}
+
+// Opens the standard appointment-scheduling modal pre-filled for a given patient/procedure
+function _scheduleApptFor(patientId, procedureType, prefDate, prefTime){
+  const pts = load(KEYS.patients);
+  if(!pts[patientId]){ toast('❌ Patient not found'); return; }
+  openModal('Schedule Appointment', aptForm({
+    patient_id:patientId, type:procedureType||'Check-up / Consultation',
+    date: prefDate||today(), time: prefTime||'09:00'
+  }), ()=>{
+    if(!fval('patient_id')){ toast('Select a patient'); return; }
+    const apts = load(KEYS.appointments);
+    const aid  = nextId(apts,'A');
+    const aptData = {patient_id:fval('patient_id'),date:fval('date'),time:fval('time'),
+      dentist:fval('dentist'),type:fval('type'),status:fval('status'),notes:fval('notes'),
+      branch: _saveBranch() || 'Main Branch'};
+    apts[aid] = aptData;
+    save(KEYS.appointments, apts, aid);
+    closeModal();
+    toast('✅ Appointment scheduled!');
+    showAppointments();
+  });
 }
 
 async function rejectIntake(id){
@@ -4075,6 +4113,19 @@ async function _showIntakeFormPage(presetBranch){
           <div class="form-group"><label class="form-label">Which Branch? *</label>
             <select class="form-control" id="in_branch"><option value="">Loading branches…</option></select>
           </div>
+          <div class="form-group"><label class="form-label">Procedure / Service Needed</label>
+            <select class="form-control" id="in_procedure">
+              <option value="">-- Not sure / General Check-up --</option>
+              ${PROCEDURE_TYPES.map(p=>`<option>${p}</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-group"><label class="form-label">Preferred Appointment Date/Time *</label>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+              <input class="form-control" id="in_date" type="date" min="${today()}" value="${today()}">
+              <input class="form-control" id="in_time" type="time" value="09:00">
+            </div>
+            <div style="font-size:11px;color:var(--muted);margin-top:4px">The clinic will confirm your actual schedule.</div>
+          </div>
           <div class="form-group"><label class="form-label">Full Name *</label><input class="form-control" id="in_name"></div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
             <div class="form-group"><label class="form-label">Age</label><input class="form-control" id="in_age" type="number"></div>
@@ -4118,8 +4169,11 @@ async function _submitIntake(){
   const name = v('in_name').trim();
   const contact = v('in_contact').trim();
   const branch = v('in_branch').trim();
+  const prefDate = v('in_date').trim();
+  const prefTime = v('in_time').trim();
   if(!branch){ toast('Please select a branch'); return; }
   if(!name || !contact){ toast('Please enter your name and contact number'); return; }
+  if(!prefDate){ toast('Please pick your preferred appointment date'); return; }
 
   const btn = document.querySelector('#intakeFormBody button');
   if(btn){ btn.disabled = true; btn.textContent = 'Submitting…'; }
@@ -4131,7 +4185,7 @@ async function _submitIntake(){
       body: JSON.stringify({
         name, contact, age:v('in_age'), gender:v('in_gender'), email:v('in_email'),
         address:v('in_address'), medical_history:v('in_medhist'), allergies:v('in_allergies'),
-        branch
+        procedure:v('in_procedure'), preferred_date:prefDate, preferred_time:prefTime, branch
       })
     });
     const data = await r.json();
@@ -4141,7 +4195,7 @@ async function _submitIntake(){
       <div style="text-align:center;padding:20px 0">
         <div style="font-size:40px">✅</div>
         <p style="font-size:14px;color:#16A34A;font-weight:700;margin-top:8px">Thank you!</p>
-        <p style="font-size:12px;color:#64748B;margin-top:4px">Your info has been sent to ${_esc(branch)}. See you at your visit!</p>
+        <p style="font-size:12px;color:#64748B;margin-top:4px">Your requested schedule (${_esc(prefDate)}${prefTime?' '+_esc(prefTime):''}) has been sent to ${_esc(branch)}. They'll confirm with you shortly.</p>
       </div>`;
   }catch(e){
     toast('❌ ' + e.message);
@@ -4394,6 +4448,9 @@ function deletePatient(id){
   });
 }
 
+// Shared procedure/service list — used by the Appointments form and the public patient intake form
+const PROCEDURE_TYPES = ['Check-up / Consultation', 'Oral Prophylaxis / Cleaning', 'Scaling and Root Planing', 'Tooth Extraction (Simple)', 'Tooth Extraction (Surgical)', 'Tooth Filling (Composite)', 'Tooth Filling (Amalgam)', 'Root Canal Treatment', 'Crown (Porcelain)', 'Crown (Metal)', 'Crown (Zirconia)', 'Bridge', 'Dental Implant', 'Denture (Full)', 'Denture (Partial)', 'Braces (Metal)', 'Braces (Ceramic)', 'Braces Adjustment', 'Retainer', 'Teeth Whitening', 'Veneers', 'Bonding', 'Fluoride Treatment', 'Fissure Sealant', 'Space Maintainer', 'Gingivectomy', 'Apicoectomy', 'Jaw Surgery', 'TMJ Treatment', 'Night Guard / Mouthguard', 'Orthodontic Consultation', 'Pediatric Dentistry', 'Emergency / Pain Relief', 'X-Ray (Periapical)', 'X-Ray (Panoramic)', 'X-Ray (Bitewing)', 'Other'];
+
 function aptForm(d={}){
   return `
     <div class="form-group"><label class="form-label">Patient *</label>
@@ -4403,7 +4460,7 @@ function aptForm(d={}){
     ${formRow('Date *','date',d.date||today(),'date')}
     ${formRow('Time','time',d.time||'09:00','time')}
     ${formRow('Dentist','dentist',d.dentist||'Dr. ')}
-    ${formRow('Type','type',d.type||'Check-up / Consultation',null,['Check-up / Consultation', 'Oral Prophylaxis / Cleaning', 'Scaling and Root Planing', 'Tooth Extraction (Simple)', 'Tooth Extraction (Surgical)', 'Tooth Filling (Composite)', 'Tooth Filling (Amalgam)', 'Root Canal Treatment', 'Crown (Porcelain)', 'Crown (Metal)', 'Crown (Zirconia)', 'Bridge', 'Dental Implant', 'Denture (Full)', 'Denture (Partial)', 'Braces (Metal)', 'Braces (Ceramic)', 'Braces Adjustment', 'Retainer', 'Teeth Whitening', 'Veneers', 'Bonding', 'Fluoride Treatment', 'Fissure Sealant', 'Space Maintainer', 'Gingivectomy', 'Apicoectomy', 'Jaw Surgery', 'TMJ Treatment', 'Night Guard / Mouthguard', 'Orthodontic Consultation', 'Pediatric Dentistry', 'Emergency / Pain Relief', 'X-Ray (Periapical)', 'X-Ray (Panoramic)', 'X-Ray (Bitewing)', 'Other'])}
+    ${formRow('Type','type',d.type||'Check-up / Consultation',null,PROCEDURE_TYPES)}
     ${formRow('Status','status',d.status||'Scheduled',null,['Scheduled','Completed','Cancelled','No-show'])}
     ${formRow('Notes','notes',d.notes)}`;
 }
@@ -9159,7 +9216,7 @@ if('serviceWorker' in navigator){
 
   async function _registerSW(){
     // Do NOT unregister — let SW update flow naturally so banner can show
-    return navigator.serviceWorker.register('./sw.js?v=52', {updateViaCache:'none', scope:'./'});
+    return navigator.serviceWorker.register('./sw.js?v=56', {updateViaCache:'none', scope:'./'});
   }
 
   function _setupReg(reg){
@@ -10115,6 +10172,17 @@ async function showChat(){ _chatUnread=0; buildNav();
   let contacts = Object.entries(accs)
     .filter(([u,a])=> u!==me && u!=='__developer__' && (a.role==='Owner'||a.role==='BranchAdmin'||a.role==='Admin'||a.role==='Developer'))
     .map(([u,a])=>({ username:u, name:a.name||u, branch:a.branch||(a.role==='Owner'?'Head Office':''), role:a.role }));
+
+  // De-dupe Owner: getAllAccounts() always injects a hidden fallback 'owner'
+  // login (safety net so the clinic can never be locked out) on top of the
+  // real accounts. Once a real Owner account exists (e.g. 'doc'), both used
+  // to show up as separate contacts — keep only the real one.
+  const ownerContacts = contacts.filter(c=>c.role==='Owner');
+  if(ownerContacts.length > 1){
+    const realOwner = ownerContacts.find(c=>c.username!=='owner') || ownerContacts[0];
+    contacts = contacts.filter(c=>c.role!=='Owner').concat(realOwner);
+  }
+
   contacts.sort((a,b)=>a.role==='Owner'?-1:b.role==='Owner'?1:0);
 
   // Fetch unread counts
