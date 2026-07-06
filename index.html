@@ -1403,6 +1403,29 @@ function checkAllNotifications(){
   checkLowStockNotifs();
   checkOverdueBalanceNotifs();
   checkUpcomingAppointmentNotifs();
+  checkPendingIntakeNotifs().catch(()=>{});
+}
+
+// 4. NEW PATIENT SELF-INTAKE ALERTS — notifies the selected branch (or all
+// branches, for Owner/Admin/Developer) that a patient submitted the public form.
+async function checkPendingIntakeNotifs(){
+  try{
+    const myBranch = getBranchName();
+    const seeAll   = canSeeAllBranches();
+    let path = 'patient_intake?status=eq.pending&select=id,name,branch';
+    if(!seeAll && myBranch) path += '&branch=eq.' + encodeURIComponent(myBranch);
+    const rows = await _sbFetch(path);
+    const list = Array.isArray(rows) ? rows : [];
+    if(list.length){
+      const names = list.slice(0,3).map(r=>r.name).join(', ');
+      const extra = list.length > 3 ? ` +${list.length-3} more` : '';
+      _addNotif('info',
+        `🆕 ${list.length} New Patient Request(s)`,
+        `${names}${extra} submitted the self-intake form and ${list.length===1?'is':'are'} waiting for approval.`,
+        "navigate('Patient Requests','showPendingIntake')"
+      );
+    }
+  }catch(e){}
 }
 
 // 1. LOW STOCK ALERTS
@@ -3925,12 +3948,16 @@ async function showPendingIntake(){
       </div>
     </div>
     <p style="font-size:12px;color:var(--muted);margin-bottom:12px">
-      Patients who filled out the self-intake form on their own phone show up here. Approve to create their patient record, or reject to discard.
+      Patients who filled out the self-intake form on their own phone show up here${canSeeAllBranches() ? ' (all branches)' : getBranchName() ? ` for ${_esc(getBranchName())}` : ''}. Approve to create their patient record, or reject to discard.
     </p>
     <div id="intakeListWrap"><div class="empty"><div class="empty-icon">⏳</div><p>Loading…</p></div></div>`;
 
   try{
-    const rows = await _sbFetch('patient_intake?status=eq.pending&order=submitted_at.desc&select=*');
+    const myBranch = getBranchName();
+    const seeAll   = canSeeAllBranches();
+    let path = 'patient_intake?status=eq.pending&order=submitted_at.desc&select=*';
+    if(!seeAll && myBranch) path += '&branch=eq.' + encodeURIComponent(myBranch);
+    const rows = await _sbFetch(path);
     _pendingIntake = Array.isArray(rows) ? rows : [];
   }catch(e){
     _pendingIntake = [];
@@ -4032,7 +4059,7 @@ function showIntakeLinkQR(){
 }
 
 // ── Public-facing self-intake form (no login) — triggered by ?intake=1 ───────
-async function _showIntakeFormPage(branch){
+async function _showIntakeFormPage(presetBranch){
   const loginScreen = document.getElementById('loginScreen');
   if(loginScreen) loginScreen.style.display = 'none';
 
@@ -4042,9 +4069,12 @@ async function _showIntakeFormPage(branch){
         <div style="text-align:center;margin-bottom:16px">
           <div style="font-size:36px">🦷</div>
           <h2 style="margin:8px 0 0;color:#0B3D6E;font-size:18px">New Patient Form</h2>
-          <p style="font-size:12px;color:#64748B;margin-top:4px">${branch ? _esc(branch)+' — ' : ''}Please fill this out before your visit</p>
+          <p style="font-size:12px;color:#64748B;margin-top:4px">Please fill this out before your visit</p>
         </div>
         <div id="intakeFormBody">
+          <div class="form-group"><label class="form-label">Which Branch? *</label>
+            <select class="form-control" id="in_branch"><option value="">Loading branches…</option></select>
+          </div>
           <div class="form-group"><label class="form-label">Full Name *</label><input class="form-control" id="in_name"></div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
             <div class="form-group"><label class="form-label">Age</label><input class="form-control" id="in_age" type="number"></div>
@@ -4057,16 +4087,38 @@ async function _showIntakeFormPage(branch){
           <div class="form-group"><label class="form-label">Address</label><input class="form-control" id="in_address"></div>
           <div class="form-group"><label class="form-label">Medical History</label><textarea class="form-control" id="in_medhist" rows="2" placeholder="Conditions, medications, past surgeries..."></textarea></div>
           <div class="form-group"><label class="form-label">Allergies</label><input class="form-control" id="in_allergies" placeholder="e.g. Penicillin"></div>
-          <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px" onclick="_submitIntake('${(branch||'').replace(/'/g,"\\'")}')">✅ Submit</button>
+          <button class="btn btn-primary" style="width:100%;justify-content:center;padding:12px" onclick="_submitIntake()">✅ Submit</button>
         </div>
       </div>
     </div>`;
+
+  // Populate branch dropdown from the clinic's real branch list (public, read-only endpoint)
+  const sel = document.getElementById('in_branch');
+  try{
+    const r = await fetch(_EF_BASE + '/public-branches', {
+      method:'POST',
+      headers:{ 'apikey':_SB_API_KEY, 'Authorization':'Bearer '+_SB_API_KEY, 'Content-Type':'application/json' },
+      body: '{}'
+    });
+    const data = await r.json();
+    const branches = (data && Array.isArray(data.branches)) ? data.branches : [];
+    if(sel){
+      sel.innerHTML = '<option value="">-- Select Branch --</option>' +
+        branches.map(b=>`<option value="${_esc(b)}" ${presetBranch && b===presetBranch ? 'selected':''}>${_esc(b)}</option>`).join('');
+    }
+  }catch(e){
+    if(sel) sel.innerHTML = presetBranch
+      ? `<option value="${_esc(presetBranch)}" selected>${_esc(presetBranch)}</option>`
+      : '<option value="">-- Could not load branches, please type below --</option>';
+  }
 }
 
-async function _submitIntake(branch){
+async function _submitIntake(){
   const v = id => (document.getElementById(id)||{}).value || '';
   const name = v('in_name').trim();
   const contact = v('in_contact').trim();
+  const branch = v('in_branch').trim();
+  if(!branch){ toast('Please select a branch'); return; }
   if(!name || !contact){ toast('Please enter your name and contact number'); return; }
 
   const btn = document.querySelector('#intakeFormBody button');
@@ -4079,7 +4131,7 @@ async function _submitIntake(branch){
       body: JSON.stringify({
         name, contact, age:v('in_age'), gender:v('in_gender'), email:v('in_email'),
         address:v('in_address'), medical_history:v('in_medhist'), allergies:v('in_allergies'),
-        branch: branch || ''
+        branch
       })
     });
     const data = await r.json();
@@ -4089,7 +4141,7 @@ async function _submitIntake(branch){
       <div style="text-align:center;padding:20px 0">
         <div style="font-size:40px">✅</div>
         <p style="font-size:14px;color:#16A34A;font-weight:700;margin-top:8px">Thank you!</p>
-        <p style="font-size:12px;color:#64748B;margin-top:4px">Your info has been sent to the clinic. See you at your visit!</p>
+        <p style="font-size:12px;color:#64748B;margin-top:4px">Your info has been sent to ${_esc(branch)}. See you at your visit!</p>
       </div>`;
   }catch(e){
     toast('❌ ' + e.message);
