@@ -1088,20 +1088,18 @@ async function syncFromCloud(){
 }
 
 // ── Smart Refresh ─────────────────────────────────────────────────────────────
-async function smartRefresh(btn){
+async function smartRefresh(btn, silent=false){
   if(btn){ btn.textContent='⏳ Syncing…'; btn.style.opacity='.6'; btn.disabled=true; }
   try{
-    _showSyncBar('⏳ Syncing from Supabase…','#1A7FC1');
+    if(!silent) _showSyncBar('⏳ Syncing from Supabase…','#1A7FC1');
     for(const t of ['patients','appointments','treatments','billing','inventory','philhealth_claims']){
       const data = await _sbPull(t);
       if(data!==null) DB.set('dc_default_'+t, data);
     }
-    _showSyncBar('✅ Synced & Refreshed!','#16A34A');
-    setTimeout(_hideSyncBar, 2500);
+    if(!silent){ _showSyncBar('✅ Synced & Refreshed!','#16A34A'); setTimeout(_hideSyncBar, 2500); }
     try{ window[currentFn] && window[currentFn](); }catch(e){}
   }catch(e){
-    _showSyncBar('⚠️ Offline — showing local data','#D97706');
-    setTimeout(_hideSyncBar, 3000);
+    if(!silent){ _showSyncBar('⚠️ Offline — showing local data','#D97706'); setTimeout(_hideSyncBar, 3000); }
     try{ window[currentFn] && window[currentFn](); }catch(e){}
   }finally{
     if(btn){ btn.textContent='☁️ Sync & Refresh'; btn.style.opacity='1'; btn.disabled=false; }
@@ -1406,12 +1404,13 @@ function checkAllNotifications(){
   checkPendingIntakeNotifs().catch(()=>{});
 }
 
-// 4. NEW PATIENT SELF-INTAKE ALERTS — notifies the selected branch (or all
-// branches, for Owner/Admin/Developer) that a patient submitted the public form.
+// 4. NEW PATIENT SELF-INTAKE ALERTS — notifies only the selected branch's
+// staff that a patient submitted the public form. Only Owner/Developer get
+// alerted about every branch at once; Admin only sees their own branch's alerts.
 async function checkPendingIntakeNotifs(){
   try{
     const myBranch = getBranchName();
-    const seeAll   = canSeeAllBranches();
+    const seeAll   = _seesAllNotifs();
     let path = 'patient_intake?status=eq.pending&select=id,name,branch';
     if(!seeAll && myBranch) path += '&branch=eq.' + encodeURIComponent(myBranch);
     const rows = await _sbFetch(path);
@@ -1454,7 +1453,7 @@ function checkLowStockNotifs(){
 function checkOverdueBalanceNotifs(){
   const allBil = load(KEYS.billing);
   const allPts = load(KEYS.patients);
-  const bil = _filterByBranch(allBil, allPts);
+  const bil = _filterByBranchForNotifs(allBil, allPts);
   const overdue = Object.values(bil).filter(b=>
     (b.status==='Unpaid'||b.status==='Partial') &&
     b.date && cleanDate(b.date) < today()
@@ -1473,7 +1472,7 @@ function checkOverdueBalanceNotifs(){
 function checkUpcomingAppointmentNotifs(){
   const allApts = load(KEYS.appointments);
   const allPts  = load(KEYS.patients);
-  const apts    = _filterByBranch(allApts, allPts);
+  const apts    = _filterByBranchForNotifs(allApts, allPts);
   const td      = today();
 
   // Tomorrow's date
@@ -2316,6 +2315,12 @@ function isOwner(){ return currentRole === 'Owner' || currentRole === 'Developer
 function isBranchAdmin(){ return currentRole === 'BranchAdmin'; }
 function canSeeAllBranches(){ if(currentRole==='Developer' && window._devOverrideBranch) return false; return currentRole === 'Owner' || currentRole === 'Admin' || currentRole === 'Developer'; }
 
+// ── Notifications: stricter than canSeeAllBranches() — Admin still sees ALL
+// branch data when they navigate into a page, but only Owner/Developer get
+// proactively alerted about every branch. Admin only gets notified about
+// their own branch, so they aren't buried in alerts for branches they don't run day-to-day.
+function _seesAllNotifs(){ if(currentRole==='Developer' && window._devOverrideBranch) return false; return currentRole === 'Owner' || currentRole === 'Developer'; }
+
 // ── Branch filter — Staff only sees their own branch data ─────────────────────
 function _myBranch(){ return canSeeAllBranches() ? '' : (getBranchName() || 'Main Branch'); }
 // Safe branch for saving records — Owner/Admin records go untagged (visible to all)
@@ -2345,6 +2350,30 @@ function _filterByBranch(records, patientsMap){
       }
       // If record has no branch, include it (could be old data without branch)
       // Only exclude if record explicitly has a DIFFERENT branch
+      if(!recBranch) return true;
+      return recBranch === myB;
+    })
+  );
+}
+
+// ── Same as _filterByBranch, but for proactive notifications only: Admin is
+// restricted to their own branch here even though canSeeAllBranches() lets
+// them view every branch when they actually open a page. Only Owner/Developer
+// get alerted about all branches at once.
+function _filterByBranchForNotifs(records, patientsMap){
+  if(_seesAllNotifs()) return records;
+  const myB = getBranchName();
+  if(!myB) return records;
+  return Object.fromEntries(
+    Object.entries(records).filter(([,r])=>{
+      let recBranch = (r.branch||'').trim();
+      if(!recBranch && patientsMap && r.patient_id){
+        recBranch = ((patientsMap[r.patient_id]||{}).branch||'').trim();
+      }
+      if(!recBranch && patientsMap && r.patient_name){
+        const found = Object.values(patientsMap).find(p=>p.name===r.patient_name);
+        recBranch = ((found||{}).branch||'').trim();
+      }
       if(!recBranch) return true;
       return recBranch === myB;
     })
@@ -3416,9 +3445,11 @@ function showDashboard(){
   _migratePatientPhilHealthFields();
   if(currentRole==='Developer'){ setTimeout(_populateDevBranchSwitcher, 200); _autoCleanupManilaBranch(); }
   // Auto-sync for Owner/Admin so they always see latest data from all branches
+  // Runs silently in the background — no sync bar on every dashboard load.
+  // The manual "☁️ Sync & Refresh" button still shows the bar (smartRefresh() with no args).
   if((currentRole==='Owner'||currentRole==='Admin'||currentRole==='Developer') && !window._dashSyncing){
     window._dashSyncing = true;
-    smartRefresh().finally(()=>{ window._dashSyncing = false; });
+    smartRefresh(null, true).finally(()=>{ window._dashSyncing = false; });
     return; // smartRefresh() calls showDashboard() again after sync
   }
   window._dashSyncing = false;
@@ -9221,7 +9252,7 @@ if('serviceWorker' in navigator){
 
   async function _registerSW(){
     // Do NOT unregister — let SW update flow naturally so banner can show
-    return navigator.serviceWorker.register('./sw.js?v=57', {updateViaCache:'none', scope:'./'});
+    return navigator.serviceWorker.register('./sw.js?v=58', {updateViaCache:'none', scope:'./'});
   }
 
   function _setupReg(reg){
