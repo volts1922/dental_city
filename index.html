@@ -9326,7 +9326,9 @@ if('serviceWorker' in navigator){
 
   async function _registerSW(){
     // Do NOT unregister — let SW update flow naturally so banner can show
-    return navigator.serviceWorker.register('./sw.js?v=60', {updateViaCache:'none', scope:'./'});
+    // No version query needed: updateViaCache:'none' forces the browser to
+    // always revalidate sw.js, so byte changes (CACHE_VER) trigger updates.
+    return navigator.serviceWorker.register('./sw.js', {updateViaCache:'none', scope:'./'});
   }
 
   function _setupReg(reg){
