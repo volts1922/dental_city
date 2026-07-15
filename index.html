@@ -1909,15 +1909,10 @@ async function _pullAccountsFromCloud(){
 
 // ── Password management ───────────────────────────────────────────────────────
 async function _initPasswords(){
-  let stored = {};
-  try{ stored = JSON.parse(localStorage.getItem(_PW_STORE_KEY)||'{}'); }catch(e){}
-  if(!stored.owner){
-    const hash = await _sha256('owner123');
-    stored.owner = hash;
-    localStorage.setItem(_PW_STORE_KEY, JSON.stringify(stored));
-    // Push owner default hash to Supabase
-    try{ await _sbFetch('passwords?on_conflict=id','POST',[{id:'owner', hash}]); }catch(e){}
-  }
+  // DISABLED (security): previously seeded a default 'owner123' hash and, on a
+  // fresh browser, could overwrite the real owner password on the server. Owner
+  // credentials are now managed entirely server-side by the login Edge Function.
+  return;
 }
 
 async function _checkPassword(username, password){
@@ -4552,6 +4547,26 @@ function aptForm(d={}){
     ${formRow('Notes','notes',d.notes)}`;
 }
 
+// ── Appointment conflict guard: same branch + date + time + dentist ──────────
+function _apptConflict(apts, cand, excludeId){
+  const norm = s => (s||'').trim().toLowerCase();
+  const realDentist = d => norm(d).replace(/^dr\.?\s*/,'').trim();
+  const skip = st => st==='Cancelled' || st==='No-show';
+  const cd = realDentist(cand.dentist);
+  if(!cand.date || !cand.time || !cd) return null;
+  if(skip(cand.status)) return null;
+  for(const xid in apts){
+    if(xid===excludeId) continue;
+    const a = apts[xid];
+    if(!a || skip(a.status)) continue;
+    if(norm(a.branch)!==norm(cand.branch)) continue;
+    if(a.date!==cand.date || a.time!==cand.time) continue;
+    if(realDentist(a.dentist)!==cd) continue;
+    return xid;
+  }
+  return null;
+}
+
 async function addApt(){
   const pts = load(KEYS.patients);
   if(!Object.keys(pts).length){ toast('Add patients first!'); return; }
@@ -4562,6 +4577,8 @@ async function addApt(){
     const aptData = {patient_id:fval('patient_id'),date:fval('date'),time:fval('time'),
       dentist:fval('dentist'),type:fval('type'),status:fval('status'),notes:fval('notes'),
       branch: _saveBranch() || 'Main Branch'};
+    const _clash = _apptConflict(apts, aptData, null);
+    if(_clash){ toast('⛔ '+(aptData.dentist||'Dentist')+' is already booked at '+aptData.time+' on '+aptData.date); return; }
     apts[id] = aptData;
     save(KEYS.appointments, apts, id);
     closeModal();
@@ -4644,6 +4661,9 @@ async function editApt(id){
     if(!fval('patient_id')){ toast('Select a patient'); return; }
     if(!(await _checkCloudVersion('appointments', id, prev))) return;
     const newStatus = fval('status');
+    const _cand = {date:fval('date'),time:fval('time'),dentist:fval('dentist'),status:newStatus,branch:prev.branch||_saveBranch()||'Main Branch'};
+    const _clash = _apptConflict(apts, _cand, id);
+    if(_clash){ toast('⛔ '+(_cand.dentist||'Dentist')+' is already booked at '+_cand.time+' on '+_cand.date); return; }
     apts[id] = {...prev, patient_id:fval('patient_id'),date:fval('date'),time:fval('time'),
       dentist:fval('dentist'),type:fval('type'),status:newStatus,notes:fval('notes'),
       updated_at:new Date().toISOString()};
