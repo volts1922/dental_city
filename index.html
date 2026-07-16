@@ -1477,7 +1477,7 @@ function checkOverdueBalanceNotifs(){
     b.date && cleanDate(b.date) < today()
   );
   if(overdue.length){
-    const total = overdue.reduce((s,b)=>s+parseFloat(b.amount||0)-parseFloat(b.paid||0),0);
+    const total = overdue.reduce((s,b)=>s+parseFloat(b.discounted_amount||b.amount||0)-parseFloat(b.paid||0),0);
     _addNotif('danger',
       `💰 ${overdue.length} Overdue Balance(s)`,
       `Total outstanding: ${fmt(total)}. Follow up with patients.`,
@@ -4612,7 +4612,7 @@ async function _addTxFromApt(apt, aptId){
     const id  = nextId(txs,'T');
     const txData = {patient_id:fval('patient_id'),procedure:fval('procedure'),date:fval('date'),
       tooth:fval('tooth'),dentist:fval('dentist'),cost:fval('cost'),notes:fval('notes'),
-      branch: _saveBranch(),
+      branch: apt.branch || _saveBranch() || 'Main Branch',
       apt_id: aptId || null};
     txs[id] = txData;
     save(KEYS.treatments, txs, id);
@@ -4647,7 +4647,8 @@ function _addBillFromTx(tx){
     const paid = parseFloat(fval('paid')||0);
     bil[id] = {patient_id:fval('patient_id'),date:fval('date'),services:fval('services'),
       amount:fval('amount'),paid:fval('paid'),payment_method:fval('payment_method'),
-      notes:fval('notes'), status: paid>=parseFloat(fval('discounted_amount')||amt)?'Paid': paid>0?'Partial':'Unpaid'};
+      notes:fval('notes'), status: paid>=parseFloat(fval('discounted_amount')||amt)?'Paid': paid>0?'Partial':'Unpaid',
+      branch: tx.branch || _saveBranch() || 'Main Branch'};
     save(KEYS.billing, bil, id);
     closeModal();
     toast('✅ Bill saved! All records complete 🎉');
@@ -5532,7 +5533,7 @@ function viewPayments(id){
   if(!b){ toast('❌ Bill not found'); return; }
   const payments = b.payments || [];
   const pname    = pName(b, pts);
-  const amt      = parseFloat(b.amount||0);
+  const amt      = parseFloat(b.discounted_amount||b.amount||0);
   const paid     = parseFloat(b.paid||0);
   const balance  = amt - paid;
 
@@ -5648,7 +5649,7 @@ function exportBilling(){
   const rows = [['ID','Patient','Date','Services','Amount','Paid','Balance','Method','Status']];
   Object.entries(bil).forEach(([id,b])=>{
     const pname = (pts[b.patient_id]||{}).name||'';
-    const amt = parseFloat(b.amount||0), paid = parseFloat(b.paid||0);
+    const amt = parseFloat(b.discounted_amount||b.amount||0), paid = parseFloat(b.paid||0);
     rows.push([id,pname,b.date,b.services,amt,paid,amt-paid,b.payment_method,b.status]);
   });
   const csv = rows.map(r=>r.join(',')).join('\n');
@@ -5663,7 +5664,7 @@ function exportBilling(){
 function printReceipt(id){
   const bil=load(KEYS.billing), pts=load(KEYS.patients);
   const b=bil[id], pname=pName(b,pts);
-  const amt=parseFloat(b.amount||0), paid=parseFloat(b.paid||0), bal=amt-paid;
+  const amt=parseFloat(b.discounted_amount||b.amount||0), paid=parseFloat(b.paid||0), bal=amt-paid;
   const cl=getClinic();
   const payments = b.payments||[];
   const payRows = payments.length
@@ -5712,7 +5713,7 @@ function printInvoice(id){
   const b    = bil[id];
   const p    = pts[b.patient_id] || {};
   const pname_inv = pName(b, pts);
-  const amt  = parseFloat(b.amount||0);
+  const amt  = parseFloat(b.discounted_amount||b.amount||0);
   const paid = parseFloat(b.paid||0);
   const bal  = amt - paid;
 
@@ -6206,7 +6207,7 @@ function exportBillingCSV(){
   Object.entries(bil)
     .sort((a,b)=>cleanDate(b[1].date).localeCompare(cleanDate(a[1].date)))
     .forEach(([id,b])=>{
-      const amt  = parseFloat(b.amount||0);
+      const amt  = parseFloat(b.discounted_amount||b.amount||0);
       const paid = parseFloat(b.paid||0);
       totalAmt  += amt; totalPaid += paid;
       rows.push([id,pName(b,allPts),cleanDate(b.date),b.services||'',
@@ -6291,7 +6292,7 @@ function exportBackup(){
     ['ID','Patient ID','Patient Name','Date','Services','Amount','Paid','Balance','Method','Status','PhilHealth','PH Covers','Patient Share','Branch']);
   Object.entries(bil).forEach(([id,b])=>{
     const p   = pts[b.patient_id]||{};
-    const amt = parseFloat(b.amount||0);
+    const amt = parseFloat(b.discounted_amount||b.amount||0);
     const paid= parseFloat(b.paid||0);
     rows.push([id,b.patient_id||'',pName(b,pts),cleanDate(b.date),
       b.services||'',amt,paid,amt-paid,b.payment_method||'',b.status||'',
@@ -7820,7 +7821,7 @@ function exportAllBranches(){
   Object.entries(branches).forEach(([,b])=>{
     Object.entries(b.billing||{}).forEach(([,bill])=>{
       const pname = (b.patients||{})[bill.patient_id]?.name||'—';
-      const amt  = parseFloat(bill.amount||0);
+      const amt  = parseFloat(bill.discounted_amount||bill.amount||0);
       const paid = parseFloat(bill.paid||0);
       rows.push([b.name, bill.patient_id, pname, bill.date,
                  bill.services, amt, paid, amt-paid, bill.status]);
@@ -7899,7 +7900,7 @@ function showBranchOverview(){
     .slice(0,8)
     .map(([id,b])=>{
       const pname = pName(b, pts);
-      const amt   = parseFloat(b.amount||0);
+      const amt   = parseFloat(b.discounted_amount||b.amount||0);
       const paid  = parseFloat(b.paid||0);
       return `<tr>
         <td><b>${pname}</b></td>
@@ -8094,7 +8095,7 @@ function showPatientHistory(pid){
       <td>${_esc(b.services||'—')}</td>
       <td>${fmt(b.amount)}</td>
       <td>${fmt(b.paid)}${instDetail}</td>
-      <td>${fmt(parseFloat(b.amount||0)-parseFloat(b.paid||0))}</td>
+      <td>${fmt(parseFloat(b.discounted_amount||b.amount||0)-parseFloat(b.paid||0))}</td>
       <td>${badgeHtml(b.status||'Unpaid')}</td>
       <td>
         ${parseFloat(b.amount||0)-parseFloat(b.paid||0) > 0
@@ -9041,7 +9042,7 @@ function _dlRecords(records, filename){
       rows.push(['=== BILLING DETAILS ===']);
       rows.push(['Date','Services','Amount','Paid','Balance','Status','Payment Method']);
       r._bills.forEach(b=>{
-        const amt=parseFloat(b.amount||0), paid=parseFloat(b.paid||0);
+        const amt=parseFloat(b.discounted_amount||b.amount||0), paid=parseFloat(b.paid||0);
         rows.push([b.date,b.services||'—','₱'+amt.toFixed(2),'₱'+paid.toFixed(2),'₱'+(amt-paid).toFixed(2),b.status||'—',b.payment_method||'—']);
       });
       rows.push([]);
