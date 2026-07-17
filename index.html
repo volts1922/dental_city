@@ -4054,9 +4054,9 @@ async function showPendingIntake(){
 async function approveIntake(id){
   const r = _pendingIntake.find(x=>x.id===id);
   if(!r){ toast('❌ Request not found — try refreshing'); return; }
-  const procNote = r.procedure ? `\nRequested procedure: ${r.procedure}` : '';
-  const whenNote = r.preferred_date ? `\nRequested date/time: ${r.preferred_date}${r.preferred_time?' '+r.preferred_time:''}` : '';
-  if(!(await _confirm(`Create a patient record for "${r.name}"?${procNote}${whenNote}`))) return;
+  const procNote = r.procedure ? `\nRequested procedure: ${_esc(r.procedure)}` : '';
+  const whenNote = r.preferred_date ? `\nRequested date/time: ${_esc(r.preferred_date)}${r.preferred_time?' '+_esc(r.preferred_time):''}` : '';
+  if(!(await _confirm(`Create a patient record for "${_esc(r.name)}"?${procNote}${whenNote}`))) return;
 
   try{
     // ── Atomically claim this request FIRST, before creating anything ──────
@@ -4097,13 +4097,13 @@ async function approveIntake(id){
 
     pts[newId] = newPatient;
     save(KEYS.patients, pts, newId);
-    _auditLog('CREATE', 'patients', newId, `Approved self-intake: ${r.name}${r.procedure?' ('+r.procedure+')':''}`);
+    _auditLog('CREATE', 'patients', newId, `Approved self-intake: ${_esc(r.name)}${r.procedure?' ('+_esc(r.procedure)+')':''}`);
 
     await _sbFetch(`patient_intake?id=eq.${encodeURIComponent(id)}`, 'PATCH', { status:'approved' });
     toast(`✅ Patient added as ${newId}`);
     showPendingIntake();
 
-    if(await _confirm(`Schedule their appointment now?${r.procedure?`\n\n"${r.procedure}" will be pre-filled as the procedure.`:''}${r.preferred_date?`\nRequested: ${r.preferred_date}${r.preferred_time?' '+r.preferred_time:''}`:''}`)){
+    if(await _confirm(`Schedule their appointment now?${r.procedure?`\n\n"${_esc(r.procedure)}" will be pre-filled as the procedure.`:''}${r.preferred_date?`\nRequested: ${_esc(r.preferred_date)}${r.preferred_time?' '+_esc(r.preferred_time):''}`:''}`)){
       _scheduleApptFor(newId, r.procedure, r.preferred_date, r.preferred_time);
     }
   }catch(e){
@@ -9323,7 +9323,7 @@ const _DC_LOGO_RECEIPT = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAMgAAADI
 // ── PWA Service Worker — inlined so GitHub Pages always serves latest ────────
 if('serviceWorker' in navigator){
   // Cache-bust sw.js with version string so GitHub Pages always serves latest
-  const _SW_VER = 'dcclinic-v51';
+  const _SW_VER = 'dcclinic-v52';
 
   async function _registerSW(){
     // Do NOT unregister — let SW update flow naturally so banner can show
