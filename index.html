@@ -5424,7 +5424,9 @@ async function editBill(id){
 function markPaid(id){
   const bil = load(KEYS.billing);
   const b   = bil[id];
-  const amt = parseFloat(b.amount||0);
+  // v67 fix: settle against the discounted (net) amount, not gross — works for
+  // full payment and for closing out the balance after installments.
+  const amt = parseFloat(b.discounted_amount||b.amount||0);
   const alreadyPaid = parseFloat(b.paid||0);
   const remaining = amt - alreadyPaid;
   if(remaining <= 0){ toast('✅ Already fully paid!'); return; }
@@ -8098,7 +8100,7 @@ function showPatientHistory(pid){
       <td>${fmt(parseFloat(b.discounted_amount||b.amount||0)-parseFloat(b.paid||0))}</td>
       <td>${badgeHtml(b.status||'Unpaid')}</td>
       <td>
-        ${parseFloat(b.amount||0)-parseFloat(b.paid||0) > 0
+        ${parseFloat(b.discounted_amount||b.amount||0)-parseFloat(b.paid||0) > 0
           ? `<button class="btn btn-sm" style="background:#16A34A;color:#fff" onclick="closeModal();recordPayment('${bid}')">💳 Pay</button>`
           : ''}
         <button class="btn btn-sm" style="background:#7C3AED;color:#fff" onclick="closeModal();viewPayments('${bid}')">📋</button>
