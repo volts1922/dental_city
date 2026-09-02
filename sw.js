@@ -1,4 +1,4 @@
-const CACHE_VER = 'dental-city-clinic-v68';
+const CACHE_VER = 'dental-city-clinic-v68.1';
 const urlsToCache = [
   './',
   './index.html',
