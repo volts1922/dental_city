@@ -517,11 +517,6 @@ select.form-control{
     <span id="branchNameBadge" style="background:var(--navy);color:#fff;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:600;"></span>
     <button id="branchEditBtn" onclick="changeBranchName()" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--muted)" title="Change branch name">✏</button>
   </div>
-  <div id="devBranchSwitcher" style="display:none;align-items:center;gap:6px;margin-right:12px">
-    <select id="devBranchSelect" onchange="devSwitchBranchView(this.value)" style="background:#7C3AED;color:#fff;border:none;border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer">
-      <option value="">🏢 Switch Branch View</option>
-    </select>
-  </div>
   <div id="userBadge" style="display:none;align-items:center;gap:8px;margin-right:8px">
     <button onclick="smartRefresh()" title="Sync and refresh" style="background:#ECFDF5;border:1.5px solid #059669;border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer;color:#059669;font-weight:700">☁️ Sync & Refresh</button>
 
@@ -1711,6 +1706,7 @@ function showBranchSetupModal(){
 
 // ── Developer Branch Switcher — quick view any branch's data without logout ──
 function _populateDevBranchSwitcher(){
+  return; // v68.1: branch-switcher dropdown removed — Owner/Developer always see all branches
   if(currentRole !== 'Developer') return;
   const sel = document.getElementById('devBranchSelect');
   const wrap = document.getElementById('devBranchSwitcher');
@@ -3513,7 +3509,7 @@ function _dashSearchPatients(q){
 function showDashboard(){
   // MIGRATION v54.1: Ensure all patients have PhilHealth fields (for old records)
   _migratePatientPhilHealthFields();
-  if(currentRole==='Developer'){ setTimeout(_populateDevBranchSwitcher, 200); _autoCleanupManilaBranch(); }
+  if(currentRole==='Developer'){ _autoCleanupManilaBranch(); }
   // Auto-sync for Owner/Admin so they always see latest data from all branches
   // Runs silently in the background — no sync bar on every dashboard load.
   // The manual "☁️ Sync & Refresh" button still shows the bar (smartRefresh() with no args).
