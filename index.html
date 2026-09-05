@@ -75,7 +75,7 @@ body{font-family:var(--font-sans);background:var(--bg);color:var(--text);min-hei
   box-shadow:2px 0 20px rgba(0,0,0,0.12);
 }
 .sidebar-logo{
-  padding:24px 20px 18px;
+  padding:14px 20px 10px;
   border-bottom:1px solid rgba(255,255,255,0.06);
 }
 .sidebar-logo .tooth{font-size:28px;display:block;margin-bottom:8px;}
@@ -93,7 +93,7 @@ body{font-family:var(--font-sans);background:var(--bg);color:var(--text);min-hei
   background:linear-gradient(90deg,var(--accent),transparent);
   border-radius:2px;
 }
-.nav{flex:1;padding:12px 10px;overflow-y:auto;}
+.nav{flex:1;min-height:0;padding:12px 10px;overflow-y:auto;}
 .nav-item{
   display:flex;align-items:center;gap:10px;
   padding:9px 12px;border-radius:var(--radius-sm);cursor:pointer;
@@ -426,29 +426,34 @@ select.form-control{
 <!-- Sidebar -->
 <nav class="sidebar" id="sidebar">
   <div class="sidebar-logo" style="text-align:center">
-    <img id="sidebarLogo" src="" alt="Dental City Clinic" style="width:150px;height:auto;display:block;margin:0 auto 6px;filter:brightness(1.05) drop-shadow(0 2px 4px rgba(0,0,0,0.3))">
-    <p style="text-align:center">Connected Care, Better Smiles</p>
+    <img id="sidebarLogo" src="" alt="Dental City Clinic" style="width:64px;height:auto;display:block;margin:0 auto 4px;filter:brightness(1.05) drop-shadow(0 2px 4px rgba(0,0,0,0.3))">
+    <p style="text-align:center;margin-top:0">Connected Care, Better Smiles</p>
   </div>
-  <div class="nav" id="nav"></div>
-  <div class="sidebar-footer">
-    <div style="margin-bottom:8px;font-size:11px;color:rgba(255,255,255,0.5)">Data Backup</div>
-    <button onclick="exportBackup()" style="width:100%;padding:7px;background:var(--teal);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:6px;">💾 Export Backup</button>
-    <label style="width:100%;padding:7px;background:#2A7FBF;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;display:block;text-align:center;box-sizing:border-box;margin-bottom:6px;">
-      📂 Import Backup
-      <input type="file" accept=".csv" onchange="importBackup(event)" style="display:none">
-    </label>
-    <button onclick="(isAdmin()||isOwner())&&changePassword()" id="changePwBtnSidebar" class="changePwBtn" style="width:100%;padding:7px;background:#374151;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:6px;">🔑 Change Password</button>
-    <button onclick="changeUsername()" style="width:100%;padding:7px;background:#374151;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:6px;">✏️ Change Username</button>
-    <div style="border-top:1px solid rgba(255,255,255,0.1);margin:10px 0 8px"></div>
-    <button onclick="doLogout()" style="width:100%;padding:10px;background:rgba(220,38,38,0.15);
+  <div class="nav" id="nav" style="min-height:0"></div>
+  <div class="sidebar-footer" style="flex-shrink:0">
+    <button onclick="_toggleSidebarSettings()" style="width:100%;padding:8px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.7);border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <span>⚙️ Settings &amp; Backup</span>
+      <span id="sidebarSettingsCaret">▾</span>
+    </button>
+    <div id="sidebarSettingsPanel" style="display:none">
+      <div style="margin-bottom:8px;font-size:11px;color:rgba(255,255,255,0.5)">Data Backup</div>
+      <button onclick="exportBackup()" style="width:100%;padding:7px;background:var(--teal);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:6px;">💾 Export Backup</button>
+      <label style="width:100%;padding:7px;background:#2A7FBF;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;display:block;text-align:center;box-sizing:border-box;margin-bottom:6px;">
+        📂 Import Backup
+        <input type="file" accept=".csv" onchange="importBackup(event)" style="display:none">
+      </label>
+      <button onclick="(isAdmin()||isOwner())&&changePassword()" id="changePwBtnSidebar" class="changePwBtn" style="width:100%;padding:7px;background:#374151;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:6px;">🔑 Change Password</button>
+      <button onclick="changeUsername()" style="width:100%;padding:7px;background:#374151;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:6px;">✏️ Change Username</button>
+      <div style="margin-top:4px;padding-top:8px;font-size:9px;color:rgba(255,255,255,0.2);border-top:1px solid rgba(255,255,255,0.1)">© 2026 Dental City Clinic</div>
+    </div>
+    <button onclick="doLogout()" style="width:100%;padding:8px;background:rgba(220,38,38,0.15);
       color:#FCA5A5;border:1px solid rgba(220,38,38,0.3);border-radius:8px;
-      font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;
-      justify-content:center;gap:8px;transition:background .2s;margin-bottom:8px"
+      font-size:12px;font-weight:700;cursor:pointer;display:flex;align-items:center;
+      justify-content:center;gap:8px;transition:background .2s"
       onmouseover="this.style.background='rgba(220,38,38,0.3)'"
       onmouseout="this.style.background='rgba(220,38,38,0.15)'">
       ⏻ Logout
     </button>
-    <div style="margin-top:4px;border-top:1px solid rgba(255,255,255,0.1);padding-top:8px;">© 2026 Dental City Clinic</div>
   </div>
 </nav>
 
@@ -516,6 +521,12 @@ select.form-control{
   <div id="branchBadge" style="display:none;align-items:center;gap:8px;margin-right:12px">
     <span id="branchNameBadge" style="background:var(--navy);color:#fff;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:600;"></span>
     <button id="branchEditBtn" onclick="changeBranchName()" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--muted)" title="Change branch name">✏</button>
+  </div>
+  <div id="devBranchSwitcher" style="display:none;align-items:center;gap:6px;margin-right:12px">
+    <span style="font-size:11px;font-weight:700;color:var(--muted)">👁️ View:</span>
+    <select id="devBranchSelect" onchange="devSwitchBranchView(this.value)"
+      style="padding:5px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:12px;font-weight:700;color:#7C3AED;outline:none;background:#F5F3FF">
+    </select>
   </div>
   <div id="userBadge" style="display:none;align-items:center;gap:8px;margin-right:8px">
     <button onclick="smartRefresh()" title="Sync and refresh" style="background:#ECFDF5;border:1.5px solid #059669;border-radius:7px;padding:4px 10px;font-size:12px;cursor:pointer;color:#059669;font-weight:700">☁️ Sync & Refresh</button>
@@ -867,6 +878,25 @@ a{color:#2563EB;text-decoration:none}
   </div>
 </div>
 </body></html>`;
+}
+
+// ── Cloud backup actions — routed through db-proxy (server checks role/branch) ──
+async function _storageAction(action, params={}){
+  if(!_appToken) throw new Error('Not logged in');
+  const r = await fetch(_EF_BASE + '/db-proxy', {
+    method: 'POST',
+    headers:{
+      'apikey':        _SB_API_KEY,
+      'Authorization': 'Bearer ' + _SB_API_KEY,
+      'Content-Type':  'application/json'
+    },
+    body: JSON.stringify({ token: _appToken, action, body: params })
+  });
+  const text = await r.text();
+  let parsed = null;
+  try{ parsed = JSON.parse(text); }catch(e){}
+  if(!r.ok){ throw new Error((parsed && parsed.error) || text || ('HTTP '+r.status)); }
+  return parsed;
 }
 
 // ── Supabase API call ─────────────────────────────────────────────────────────
@@ -1705,8 +1735,16 @@ function showBranchSetupModal(){
 
 
 // ── Developer Branch Switcher — quick view any branch's data without logout ──
+function _toggleSidebarSettings(){
+  const panel = document.getElementById('sidebarSettingsPanel');
+  const caret = document.getElementById('sidebarSettingsCaret');
+  if(!panel) return;
+  const open = panel.style.display !== 'none';
+  panel.style.display = open ? 'none' : 'block';
+  if(caret) caret.textContent = open ? '▾' : '▴';
+}
+
 function _populateDevBranchSwitcher(){
-  return; // v68.1: branch-switcher dropdown removed — Owner/Developer always see all branches
   if(currentRole !== 'Developer') return;
   const sel = document.getElementById('devBranchSelect');
   const wrap = document.getElementById('devBranchSwitcher');
@@ -2165,6 +2203,7 @@ async function doLogin(){
     try{ buildNav(); }catch(e2){}
     try{ await syncFromCloud(); }catch(e2){ showDashboard(); }
     try{ initBranchName(); }catch(e2){}
+    try{ _populateDevBranchSwitcher(); }catch(e2){}
     try{ checkBackupReminder(); }catch(e2){}
     try{ _initOfflineBanner(); }catch(e2){}
     try{ toast(`👋 Welcome, ${currentUser}!`); }catch(e2){}
@@ -6465,20 +6504,12 @@ async function _uploadBackupToCloud(snapshot){
 
 async function _pruneCloudBackups(branch, cfg){
   try{
-    const res = await fetch(cfg.url+'/storage/v1/object/list/backups',{
-      method:'POST',
-      headers:{'apikey':cfg.key,'Authorization':'Bearer '+cfg.key,'Content-Type':'application/json'},
-      body: JSON.stringify({limit:100,offset:0,prefix:branch+'/',sortBy:{column:'created_at',order:'asc'}})
-    });
-    if(!res.ok) return;
-    const files = await res.json();
+    if(!_appToken) return; // pruning needs a logged-in session now (routed through db-proxy)
+    const listResult = await _storageAction('list_backups', {limit:100,offset:0,prefix:branch+'/',sortBy:{column:'created_at',order:'asc'}});
+    const files = (listResult && listResult.items) || [];
     if(!Array.isArray(files)||files.length<=5) return;
     const toDelete = files.slice(0,files.length-5).map(f=>'backups/'+branch+'/'+f.name);
-    await fetch(cfg.url+'/storage/v1/object/backups',{
-      method:'DELETE',
-      headers:{'apikey':cfg.key,'Authorization':'Bearer '+cfg.key,'Content-Type':'application/json'},
-      body: JSON.stringify({prefixes:toDelete})
-    });
+    await _storageAction('delete_backups', {paths: toDelete});
   }catch(e){}
 }
 
@@ -6507,14 +6538,9 @@ async function showCloudBackups(){
     if(isAll){
       // Developer/Owner/Admin: list ALL files under backups/ and extract unique folder names
       try{
-        const listRes = await fetch(cfg.url+'/storage/v1/object/list/backups',{
-          method:'POST',
-          headers:{'apikey':cfg.key,'Authorization':'Bearer '+cfg.key,'Content-Type':'application/json'},
-          body: JSON.stringify({limit:200,offset:0,prefix:'',sortBy:{column:'name',order:'asc'}})
-        });
-        const rawItems = await listRes.json();
-        console.log('Storage list status:', listRes.status, 'items:', JSON.stringify(rawItems).substring(0,300));
-        if(listRes.ok && Array.isArray(rawItems) && rawItems.length){
+        const listRes = await _storageAction('list_backups', {limit:200,offset:0,prefix:'',sortBy:{column:'name',order:'asc'}});
+        const rawItems = (listRes && listRes.items) || [];
+        if(Array.isArray(rawItems) && rawItems.length){
           const folderSet = new Set();
           rawItems.forEach(f=>{
             if(!f.name) return;
@@ -6550,20 +6576,14 @@ async function showCloudBackups(){
     let allFiles = [];
     for(const folder of allFolders){
       try{
-        const r = await fetch(cfg.url+'/storage/v1/object/list/backups',{
-          method:'POST',
-          headers:{'apikey':cfg.key,'Authorization':'Bearer '+cfg.key,'Content-Type':'application/json'},
-          body: JSON.stringify({limit:20,offset:0,prefix:folder+'/',sortBy:{column:'created_at',order:'desc'}})
-        });
-        if(r.ok){
-          const files = await r.json();
-          if(Array.isArray(files)){
-            files.forEach(f=>{
-              // Strip folder prefix from name (e.g. "bgc/bgc_123.csv" -> "bgc_123.csv")
-              const fname = f.name ? f.name.replace(folder+'/', '') : '';
-              if(fname) allFiles.push({folder, name:fname, created:f.created_at||''});
-            });
-          }
+        const r = await _storageAction('list_backups', {limit:20,offset:0,prefix:folder+'/',sortBy:{column:'created_at',order:'desc'}});
+        const files = (r && r.items) || [];
+        if(Array.isArray(files)){
+          files.forEach(f=>{
+            // Strip folder prefix from name (e.g. "bgc/bgc_123.csv" -> "bgc_123.csv")
+            const fname = f.name ? f.name.replace(folder+'/', '') : '';
+            if(fname) allFiles.push({folder, name:fname, created:f.created_at||''});
+          });
         }
       }catch(e){}
     }
@@ -6609,14 +6629,10 @@ async function showCloudBackups(){
 
 // ── Download a cloud backup file ──────────────────────────────────────────────
 async function _downloadCloudBackup(folder, filename){
-  const cfg = getSBConfig();
-  if(!cfg.url||!cfg.key) return;
   try{
-    const res = await fetch(cfg.url+'/storage/v1/object/backups/'+folder+'/'+filename,{
-      headers:{'apikey':cfg.key,'Authorization':'Bearer '+cfg.key}
-    });
-    if(!res.ok){ toast('❌ Download failed'); return; }
-    const text = await res.text();
+    const result = await _storageAction('get_backup', {folder, filename});
+    const text = result && result.content;
+    if(text == null){ toast('❌ Download failed'); return; }
     const blob = new Blob([text],{type:'text/csv;charset=utf-8'});
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
@@ -6628,10 +6644,7 @@ async function _downloadCloudBackup(folder, filename){
 
 // ── Restore from a cloud backup file ─────────────────────────────────────────
 async function _restoreCloudBackup(folder, filename){
-  const cfg = getSBConfig();
-  if(!cfg.url||!cfg.key) return;
-
-  // Branch restriction check
+  // Branch restriction check (server enforces this too — this is just a fast local check)
   if(!canSeeAllBranches()){
     const mySlug = _branchSlug(getBranchName());
     if(folder !== mySlug){ toast('⛔ You can only restore your own branch backups.'); return; }
@@ -6641,11 +6654,9 @@ async function _restoreCloudBackup(folder, filename){
 
   try{
     toast('⏳ Downloading backup…');
-    const res = await fetch(cfg.url+'/storage/v1/object/backups/'+folder+'/'+filename,{
-      headers:{'apikey':cfg.key,'Authorization':'Bearer '+cfg.key}
-    });
-    if(!res.ok){ toast('❌ Could not fetch backup'); return; }
-    const text = await res.text();
+    const result = await _storageAction('get_backup', {folder, filename});
+    const text = result && result.content;
+    if(text == null){ toast('❌ Could not fetch backup'); return; }
 
     // Parse CSV (reuse existing importBackup parser logic)
     const lines = text.replace(/^\uFEFF/,'').split(/\r?\n/);
