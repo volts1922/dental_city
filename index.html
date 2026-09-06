@@ -2786,7 +2786,22 @@ function showAutoBackupList(){
     return;
   }
 
-  const rows = backups.map((b,i)=>`
+  // Strictly scope to the currently active branch — never show/restore another
+  // branch's snapshot, to prevent restoring the wrong branch's data by mistake.
+  const myBranch = getBranchName();
+  if(!myBranch){
+    toast('⚠️ Select a specific branch (top bar) before viewing auto-backups.');
+    return;
+  }
+  const mySlug = _branchSlug(myBranch);
+  const withIdx = backups.map((b,i)=>({b,i})).filter(({b})=>_branchSlug(b.branch||'') === mySlug);
+
+  if(!withIdx.length){
+    toast('No auto-backups found for '+myBranch+'.');
+    return;
+  }
+
+  const rows = withIdx.map(({b,i})=>`
     <div style="background:var(--bg);border-radius:10px;padding:14px 16px;margin-bottom:10px;border:1px solid var(--border)">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
         <div>
@@ -6656,11 +6671,13 @@ async function _downloadCloudBackup(folder, filename){
 
 // ── Restore from a cloud backup file ─────────────────────────────────────────
 async function _restoreCloudBackup(folder, filename){
-  // Branch restriction check (server enforces this too — this is just a fast local check)
-  if(!canSeeAllBranches()){
-    const mySlug = _branchSlug(getBranchName());
-    if(folder !== mySlug){ toast('⛔ You can only restore your own branch backups.'); return; }
-  }
+  // Strictly scope restore to whichever branch is currently active — even
+  // Developer must be viewing that exact branch (via the branch switcher)
+  // before restoring it, to prevent restoring the wrong branch's data.
+  const myBranch = getBranchName();
+  if(!myBranch){ toast('⚠️ Select a specific branch (top bar) before restoring a cloud backup.'); return; }
+  const mySlug = _branchSlug(myBranch);
+  if(folder !== mySlug){ toast('⛔ That backup is from a different branch. Switch to that branch first, then restore.'); return; }
 
   if(!(await _confirm('↩ Restore this cloud backup?\n\nThis will REPLACE your current local data. Are you sure?',{icon:'☁️',ok:'Restore',danger:true}))) return;
 
@@ -6732,6 +6749,14 @@ async function restoreAutoBackup(index){
     const backups = JSON.parse(localStorage.getItem(_AUTO_BACKUP_KEY)||'[]');
     const snap = backups[index];
     if(!snap){ toast('❌ Backup not found'); return; }
+    // Hard check: never restore a snapshot from a different branch than the one
+    // currently active, even if this is called some other way than the list UI.
+    const myBranch = getBranchName();
+    if(!myBranch){ toast('⚠️ Select a specific branch (top bar) before restoring.'); return; }
+    if(_branchSlug(snap.branch||'') !== _branchSlug(myBranch)){
+      toast('⛔ That backup is from a different branch ('+(snap.branch||'unknown')+'). Switch to that branch first.');
+      return;
+    }
     if(!(await _confirm(`Restore backup from ${snap.time}?\n\nYour current data will be replaced.`))) return;
     const d = snap.data;
     // Merge backup into existing data (newer records win via ID)
