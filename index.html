@@ -9468,6 +9468,11 @@ if('serviceWorker' in navigator){
   }
 
   window.addEventListener('load', ()=>{
+    // A fresh page load means any in-progress update has finished — clear the
+    // one-shot suppression flag now, or it would silently block the update
+    // banner from ever showing again for the rest of this browser tab's life
+    // (sessionStorage survives reload; it only clears when the tab closes).
+    try{ sessionStorage.removeItem('_updatingNow'); }catch(e){}
     _registerSW().then(_setupReg).catch(()=>{});
 
     document.addEventListener('visibilitychange', ()=>{
