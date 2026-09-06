@@ -438,7 +438,7 @@ select.form-control{
     <div id="sidebarSettingsPanel" style="display:none">
       <div style="margin-bottom:8px;font-size:11px;color:rgba(255,255,255,0.5)">Data Backup</div>
       <button onclick="exportBackup()" style="width:100%;padding:7px;background:var(--teal);color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;margin-bottom:6px;">💾 Export Backup</button>
-      <label style="width:100%;padding:7px;background:#2A7FBF;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;display:block;text-align:center;box-sizing:border-box;margin-bottom:6px;">
+      <label id="importBackupLabel" style="width:100%;padding:7px;background:#2A7FBF;color:#fff;border:none;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;display:none;text-align:center;box-sizing:border-box;margin-bottom:6px;">
         📂 Import Backup
         <input type="file" accept=".csv" onchange="importBackup(event)" style="display:none">
       </label>
@@ -1751,12 +1751,21 @@ function _populateDevBranchSwitcher(){
   if(!sel || !wrap) return;
   wrap.style.display = 'flex';
 
+  // Pull branch names from every local data source we have, not just cached
+  // accounts (a fresh browser may only have one branch's accounts cached
+  // locally, which was hiding every other branch from this dropdown).
+  const knownBranches = ['Main Branch','Manila','BGC','Makati','QC','Bicutan'];
   const accounts = getAllAccounts();
-  // Deduplicate by slug — keep the first/most common spelling per slug
+  const acctBranches = Object.values(accounts).map(a=>(a.branch||'').trim()).filter(Boolean);
+  let ptBranches = [], apptBranches = [];
+  try{ ptBranches   = Object.values(load(KEYS.patients)||{}).map(p=>(p.branch||'').trim()).filter(Boolean); }catch(e){}
+  try{ apptBranches = Object.values(load(KEYS.appointments)||{}).map(a=>(a.branch||'').trim()).filter(Boolean); }catch(e){}
+
+  // Deduplicate by slug — keep the first spelling seen per slug
   const slugMap = {};
-  Object.values(accounts).filter(a=>a.branch).forEach(a=>{
-    const slug = _branchSlug(a.branch);
-    if(!slugMap[slug]) slugMap[slug] = a.branch;
+  [...knownBranches, ...acctBranches, ...ptBranches, ...apptBranches].forEach(b=>{
+    const slug = _branchSlug(b);
+    if(!slugMap[slug]) slugMap[slug] = b;
   });
   const branches = Object.values(slugMap).sort();
 
@@ -2186,6 +2195,9 @@ async function doLogin(){
       if(nameLabel) nameLabel.textContent = currentUser;
       const badge = document.getElementById('userBadge');
       if(badge) badge.style.display = 'flex';
+      // Import Backup can overwrite live data across the app — Developer only.
+      const importLbl = document.getElementById('importBackupLabel');
+      if(importLbl) importLbl.style.display = (currentRole==='Developer') ? 'block' : 'none';
     }catch(e2){}
 
     // Show sidebar and topbar
@@ -6936,6 +6948,7 @@ function _doSendReport(branch, contact){
 }
 
 async function importBackup(event){
+  if(currentRole !== 'Developer'){ toast('⛔ Only Developer accounts can import backups.'); return; }
   const file = event.target.files[0];
   if(!file) return;
   const reader = new FileReader();
