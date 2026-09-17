@@ -1,4 +1,4 @@
-const CACHE_VER = 'dental-city-clinic-v75';
+const CACHE_VER = 'dental-city-clinic-v68.2'; // bumped: forces cached installs to fetch the fixed index.html
 const urlsToCache = [
   './',
   './index.html',
