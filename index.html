@@ -4610,6 +4610,10 @@ function aptForm(d={}){
 // v68: basic appointment validation (date/time format, same patient booked twice)
 function _apptInvalid(apts, cand, excludeId){
   if(!/^\d{4}-\d{2}-\d{2}$/.test(cand.date||'') || isNaN(new Date(cand.date))) return 'Please enter a valid appointment date';
+  // Fix (audit): block booking a NEW appointment on a date that's already passed.
+  // Only applies to new records (excludeId is null) so editing/logging an
+  // already-completed past appointment is still allowed.
+  if(!excludeId && cand.date < today()) return 'Appointment date cannot be in the past';
   if(cand.time && !/^\d{2}:\d{2}/.test(cand.time)) return 'Please enter a valid time';
   const dup = Object.entries(apts).find(([xid,a])=>xid!==excludeId && a && a.patient_id===cand.patient_id &&
     a.date===cand.date && a.time===cand.time && a.status!=='Cancelled' && a.status!=='No-show' && cand.status!=='Cancelled');
