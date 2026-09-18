@@ -2548,41 +2548,89 @@ function generateEmployeeID() {
   return (id === '0' || id === '1') ? generateEmployeeID() : id;
 }
 
+// v88: employee ID generation now asks the cloud (source of truth) instead of
+// only the local cache — a stale cache or a second admin adding an employee
+// moments earlier could previously generate the SAME id. Worse: employees_201
+// upserts on employee_id, so a collision didn't even error — it silently
+// overwrote whichever employee already had that id (wrong branch_id/photo).
+// Now: check the cloud for the id before ever touching employees_201, and if
+// a true race still lands on a taken id, detect it and retry with the next
+// number instead of upserting over someone else's record.
+async function _nextFreeEmployeeId(branch){
+  const branchCode = branch.substring(0, 3).toUpperCase();
+  const emps = load(KEYS.employees) || {};
+  const localNums = Object.keys(emps)
+    .filter(k => k.startsWith(branchCode + '-'))
+    .map(k => parseInt(k.split('-')[1])).filter(n => !isNaN(n));
+
+  let cloudIds = new Set();
+  if(_sb){
+    try{
+      // employee_id is globally unique (not just per-branch), so check ALL
+      // employees_201 rows whose id starts with this branch's prefix.
+      const {data} = await _sb.from('employees_201').select('employee_id').ilike('employee_id', `${branchCode}-%`);
+      (data||[]).forEach(r => cloudIds.add(r.employee_id));
+    }catch(e){ console.warn('⚠️ Could not verify existing IDs from cloud, falling back to local cache only:', e.message); }
+  }
+  const cloudNums = [...cloudIds].map(k => parseInt(k.split('-')[1])).filter(n => !isNaN(n));
+  let nextNum = Math.max(0, ...localNums, ...cloudNums) + 1;
+  let id = `${branchCode}-${String(nextNum).padStart(3, '0')}`;
+  // Belt-and-suspenders: if this exact id is already taken locally or in the
+  // cloud snapshot we just pulled, keep incrementing instead of reusing it.
+  while(emps[id] || cloudIds.has(id)){
+    nextNum++;
+    id = `${branchCode}-${String(nextNum).padStart(3, '0')}`;
+  }
+  return id;
+}
+
 function addEmp(){
   openModal('Add Employee',empForm(),async()=>{
     if(!fval('name')||!fval('daily_rate')){toast('⚠️ Name and daily rate required');return;}
     // BranchAdmin/SuperAdmin: enforce their own branch even if someone tampers with the field
     const branch = (isBranchAdmin()||isSuperAdmin()) ? getBranch() : fval('branch');
     if(!branch){toast('⚠️ Branch is required');return;}
-    
-    // Generate ID: BRANCHCODE-###
-    const branchCode = branch.substring(0, 3).toUpperCase();
-    const emps = load(KEYS.employees);
-    const branchEmps = Object.keys(emps).filter(k => k.startsWith(branchCode));
-    const nums = branchEmps.map(k => parseInt(k.split('-')[1])).filter(n => !isNaN(n));
-    const nextNum = (nums.length === 0 ? 0 : Math.max(...nums)) + 1;
-    const id = `${branchCode}-${String(nextNum).padStart(3, '0')}`;
-    
+
     const photo = document.getElementById('f_photo')?.value || '';
-    emps[id]={name:fval('name'),role:fval('role'),daily_rate:fval('daily_rate'),
+    const empRecord = {name:fval('name'),role:fval('role'),daily_rate:fval('daily_rate'),
       branch, contact:fval('contact'),email:fval('email'),
       status:fval('status'), date_hired:fval('date_hired'), emp_type:fval('emp_type')||'Regular',
       allowances:getAllowances(), photo,
       payout_method:fval('payout_method')||'GCash', bank_name:fval('bank_name')||'',
       account_number:fval('account_number')||'', account_name:fval('account_name')||fval('name')};
-    save(KEYS.employees,emps);
-    
-    // Auto-create 201 record with photo in Supabase
+
+    // Ask the cloud for a free ID, then re-verify right before writing —
+    // closes the window between "checked" and "saved" as tightly as a
+    // client-only app can without a DB-side sequence.
+    let id = await _nextFreeEmployeeId(branch);
+    let branchData = null;
     try{
-      const {data: branchData} = await _sb.from('branches').select('id').eq('name', branch).single();
-      if(branchData){
-        await _sbInsertOrUpdate('employees_201',{employee_id:id,branch_id:branchData.id,photo});
+      const r = await _sb.from('branches').select('id').eq('name', branch).single();
+      branchData = r.data;
+    }catch(e){ console.warn('⚠️ Branch lookup failed:', e.message); }
+
+    if(branchData && _sb){
+      const {data: clash} = await _sb.from('employees_201').select('employee_id').eq('employee_id', id).maybeSingle();
+      if(clash){
+        toast('⚠️ ID collision detected right before saving — regenerating, please click Save again.');
+        return;
       }
-    }catch(e){
-      console.warn('⚠️ 201 auto-create failed (non-blocking):',e.message);
     }
-    
-    closeModal(); toast('✅ Employee added with photo! Empty 201 file created.'); showEmployees();
+
+    const emps = load(KEYS.employees);
+    emps[id] = empRecord;
+    save(KEYS.employees,emps);
+
+    // Auto-create 201 record with photo in Supabase
+    if(branchData){
+      try{
+        await _sbInsertOrUpdate('employees_201',{employee_id:id,branch_id:branchData.id,photo});
+      }catch(e){
+        console.warn('⚠️ 201 auto-create failed (non-blocking):',e.message);
+      }
+    }
+
+    closeModal(); toast(`✅ Employee added (ID: ${id})`); showEmployees();
   });
 }
 
@@ -9004,7 +9052,7 @@ else setSyncBar('syncing','☁ Supabase ready');
 if('serviceWorker' in navigator){
   window.addEventListener('load', ()=>{
     // ?v= busts GitHub Pages cache so browser always fetches latest sw.js
-    const _SW_VER = 'dcpayroll-v88';
+    const _SW_VER = 'dcpayroll-v89';
     navigator.serviceWorker.register('./sw.js?v='+_SW_VER).then(reg=>{
       console.log('[PWA] ✅ Service worker ready');
 
