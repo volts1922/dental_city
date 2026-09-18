@@ -98,7 +98,13 @@
 // set, so it never rendered. (2) SuperAdmin sidebar (13 items, one flat
 // list) now grouped into Operations / Payroll / Management, same group-tag
 // system Owner/Dev already used (v58).
-const CACHE_VERSION = 'dental-city-payroll-v88-nocache';
+// v89: Add Employee ID generation now checks the CLOUD for the next free id
+// (not just the local cache) before writing, and re-verifies right before
+// saving. Previously a stale local cache — or a second admin adding someone
+// moments earlier — could generate a duplicate id; since employees_201
+// upserts on employee_id, that collision didn't even error, it silently
+// overwrote the OTHER employee's branch_id/photo. Now detected and blocked.
+const CACHE_VERSION = 'dental-city-payroll-v89-nocache';
 const CACHE_NAME = CACHE_VERSION;
 
 // Files to cache
@@ -192,4 +198,4 @@ self.addEventListener('message', (event) => {
   }
 });
 
-console.log('[SW] Service Worker loaded v88');
+console.log('[SW] Service Worker loaded v89');
