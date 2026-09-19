@@ -3185,46 +3185,65 @@ function showLoginLog(){
 }
 
 // ── Sidebar Navigation ────────────────────────────────────────────────────────
-const _NAV_BASE = [
-  {icon:'📊', label:'Dashboard',       fn:'showDashboard'},
-  {icon:'👤', label:'Patients',        fn:'showPatients'},
-  {icon:'🆕', label:'Patient Requests', fn:'showPendingIntake'},
-  {icon:'📅', label:'Appointments',    fn:'showAppointments'},
-  {icon:'🗓', label:'Calendar',        fn:'showCalendar'},
-  {icon:'🪑', label:'Queue',           fn:'showQueue'},
-  {icon:'🦷', label:'Treatments',      fn:'showTreatments'},
-  {icon:'🗺', label:'Dental Chart',    fn:'showDentalChart'},
-  {icon:'💰', label:'Billing',         fn:'showBilling'},
-  {icon:'📦', label:'Inventory',       fn:'showInventory'},
-  {icon:'📷', label:'QR Scanner',      fn:'showQRScanner'},
-  {icon:'📈', label:'Reports',         fn:'showReports'},
-  {icon:'📋', label:'PhilHealth',      fn:'showPhilHealthClaims'},
-];
-const NAV_OWNER = [..._NAV_BASE,
-  {icon:'🏢', label:'Multi-Branch',    fn:'showMultiBranch'},
-  {icon:'💬', label:'Chat',            fn:'showChat'},
-  {icon:'⚙️', label:'Settings',        fn:'showSettings'},
-];
-const NAV_ADMIN = [..._NAV_BASE,
-  {icon:'💬', label:'Chat',            fn:'showChat'},
-  {icon:'⚙️', label:'Settings',        fn:'showSettings'},
-];
-const NAV_STAFF = [..._NAV_BASE,
-  {icon:'📈', label:'Branch Overview', fn:'showBranchOverview'},
-];
+// Grouped into labeled sections (via .nav-section, already styled in CSS) for a
+// more professional, scannable sidebar instead of one long flat list.
+function _navGroups(){
+  const groups = [
+    { section:'Overview', items:[
+      {icon:'📊', label:'Dashboard', fn:'showDashboard'},
+    ]},
+    { section:'Patients', items:[
+      {icon:'👤', label:'Patients',         fn:'showPatients'},
+      {icon:'🆕', label:'Patient Requests', fn:'showPendingIntake'},
+    ]},
+    { section:'Scheduling', items:[
+      {icon:'📅', label:'Appointments', fn:'showAppointments'},
+      {icon:'🗓', label:'Calendar',     fn:'showCalendar'},
+      {icon:'🪑', label:'Queue',        fn:'showQueue'},
+    ]},
+    { section:'Clinical', items:[
+      {icon:'🦷', label:'Treatments',   fn:'showTreatments'},
+      {icon:'🗺', label:'Dental Chart', fn:'showDentalChart'},
+    ]},
+    { section:'Billing', items:[
+      {icon:'💰', label:'Billing',    fn:'showBilling'},
+      {icon:'📋', label:'PhilHealth', fn:'showPhilHealthClaims'},
+    ]},
+    { section:'Operations', items:[
+      {icon:'📦', label:'Inventory',   fn:'showInventory'},
+      {icon:'📷', label:'QR Scanner',  fn:'showQRScanner'},
+    ]},
+  ];
+
+  const insights = [{icon:'📈', label:'Reports', fn:'showReports'}];
+  if(!isOwner() && !isAdmin()) insights.push({icon:'📈', label:'Branch Overview', fn:'showBranchOverview'});
+  groups.push({ section:'Insights', items:insights });
+
+  const admin = [];
+  if(isOwner()) admin.push({icon:'🏢', label:'Multi-Branch', fn:'showMultiBranch'});
+  if(isOwner() || isAdmin()){
+    admin.push({icon:'💬', label:'Chat',     fn:'showChat'});
+    admin.push({icon:'⚙️', label:'Settings', fn:'showSettings'});
+  }
+  if(admin.length) groups.push({ section:'Administration', items:admin });
+
+  return groups;
+}
 
 let currentPage = '';
 let _chatUnread = 0;
 let _intakeUnread = 0;
 function buildNav(){
   const nav = document.getElementById('nav');
-  const items = isOwner() ? NAV_OWNER : isAdmin() ? NAV_ADMIN : NAV_STAFF;
-  nav.innerHTML = items.map(n=>`
+  const groups = _navGroups();
+  nav.innerHTML = groups.map(g=>`
+    <div class="nav-section">${g.section}</div>
+    ${g.items.map(n=>`
     <div class="nav-item${currentPage===n.label?' active':''}" onclick="navigate('${n.label}','${n.fn}')" style="position:relative">
       <span class="icon">${n.icon}</span>${n.label}
       ${n.label==='Chat'&&_chatUnread>0?'<span class="_chatBadge" style="position:absolute;top:4px;right:4px;width:9px;height:9px;background:#e53e3e;border-radius:50%;border:2px solid var(--navy)"></span>':''}
       ${n.label==='Patient Requests'&&_intakeUnread>0?'<span class="_intakeBadge" style="position:absolute;top:4px;right:4px;width:9px;height:9px;background:#e53e3e;border-radius:50%;border:2px solid var(--navy)"></span>':''}
-    </div>`).join('');
+    </div>`).join('')}`).join('');
 }
 function navigate(label, fn, arg){
   if(typeof _stopCam==='function') _stopCam();
