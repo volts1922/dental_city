@@ -1,4 +1,4 @@
-const CACHE_VER = 'dental-city-clinic-v68.3'; // bumped: forces cached installs to fetch the fixed index.html
+const CACHE_VER = 'dental-city-clinic-v68.4'; // bumped: sidebar nav grouped into sections
 const urlsToCache = [
   './',
   './index.html',
