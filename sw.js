@@ -1,4 +1,4 @@
-const CACHE_VER = 'dental-city-clinic-v68.4'; // bumped: sidebar nav grouped into sections
+const CACHE_VER = 'dental-city-clinic-v68.8'; // bumped: logo now circular with gold trim
 const urlsToCache = [
   './',
   './index.html',
