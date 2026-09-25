@@ -1,4 +1,5 @@
-const CACHE_VER = 'dental-city-clinic-v68.9'; // bumped: removed white margin ring around logo, gold trim now flush to edge
+// v78: pre-launch — cache bump + network-first for page loads (no stale app)
+const CACHE_VER = 'dental-city-clinic-v78';
 const urlsToCache = [
   './',
   './index.html',
@@ -41,6 +42,23 @@ self.addEventListener('fetch', event => {
     return;
   }
   if (request.method !== 'GET') return;
+
+  // v78: page loads go network-first so staff always get the newest index.html;
+  // cached copy is only used when offline.
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then(res => {
+          if (res && res.status === 200) {
+            const c = res.clone();
+            caches.open(CACHE_VER).then(cache => cache.put('./index.html', c));
+          }
+          return res;
+        })
+        .catch(() => caches.match('./index.html'))
+    );
+    return;
+  }
 
   event.respondWith(
     caches.match(request)
