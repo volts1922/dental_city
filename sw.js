@@ -1,24 +1,79 @@
-const CACHE_VER = 'laundry-app-v1'; // bump this every time index.html changes
-const urlsToCache = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
+const CACHE_VER = 'dental-city-clinic-v69.3'; // v69.3: intake XSS fix + billing net-amount fixes
+const urlsToCache = [
+  './',
+  './index.html',
+  './manifest.json',
+  './icon-192.png',
+  './icon-512.png',
+  'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js',
+  'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js',
+  'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap',
+];
 
-self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });
-self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE_VER).then(c => c.addAll(urlsToCache)).catch(err => console.log('Cache install error:', err)));
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
 });
-self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(v => Promise.all(v.filter(x => x !== CACHE_VER).map(x => caches.delete(x)))).then(() => self.clients.claim()));
+
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_VER)
+      .then(cache => cache.addAll(urlsToCache))
+      .then(() => self.skipWaiting())
+      .catch(err => console.log('Cache install error:', err))
+  );
 });
-self.addEventListener('fetch', e => {
-  const req = e.request, url = new URL(req.url);
-  if (req.method !== 'GET') return;
-  if (url.origin !== location.origin && !url.hostname.includes('googleapis') && !url.hostname.includes('gstatic')) return; // never cache Supabase calls
-  if (req.mode === 'navigate') {   // network-first so staff always get the newest version
-    e.respondWith(fetch(req).then(res => { if (res && res.status === 200) { const c = res.clone(); caches.open(CACHE_VER).then(k => k.put('./index.html', c)); } return res; })
-      .catch(() => caches.match('./index.html')));
+
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys()
+      .then(versions => Promise.all(
+        versions
+          .filter(v => v !== CACHE_VER)
+          .map(v => caches.delete(v))
+      ))
+      .then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('fetch', event => {
+  const { request } = event;
+  const url = new URL(request.url);
+
+  // Skip cross-origin and non-GET
+  if (url.origin !== location.origin && !url.hostname.includes('cdnjs') && !url.hostname.includes('googleapis') && !url.hostname.includes('unpkg')) {
     return;
   }
-  e.respondWith(caches.match(req).then(r => r || fetch(req).then(res => {
-    if (res && res.status === 200) { const c = res.clone(); caches.open(CACHE_VER).then(k => k.put(req, c)); }
-    return res;
-  }).catch(() => Response.error())));
+  if (request.method !== 'GET') return;
+
+  // v69: page loads go network-first so staff always get the newest index.html;
+  // cached copy is only used when offline.
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request)
+        .then(res => {
+          if (res && res.status === 200) {
+            const c = res.clone();
+            caches.open(CACHE_VER).then(cache => cache.put('./index.html', c));
+          }
+          return res;
+        })
+        .catch(() => caches.match('./index.html'))
+    );
+    return;
+  }
+
+  event.respondWith(
+    caches.match(request)
+      .then(response => response || fetch(request)
+        .then(res => {
+          if (!res || res.status !== 200 || res.type === 'error') return res;
+          const cloned = res.clone();
+          caches.open(CACHE_VER).then(cache => cache.put(request, cloned));
+          return res;
+        })
+        // v68: only fall back to the app shell for page navigations — never hand
+        // index.html back to a <script>/<link> request (that broke Supabase loading offline)
+        .catch(() => request.mode === 'navigate' ? caches.match('./index.html') : Response.error())
+      )
+  );
 });
