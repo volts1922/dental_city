@@ -1,4 +1,4 @@
-const CACHE_VER = 'dental-city-clinic-v69.3'; // v69.3: intake XSS fix + billing net-amount fixes
+const CACHE_VER = 'dental-city-clinic-v69.4'; // v69.4: branch picker for Owner/Admin + intake duplicate check
 const urlsToCache = [
   './',
   './index.html',

@@ -2350,6 +2350,23 @@ function _myBranch(){ return canSeeAllBranches() ? '' : (getBranchName() || 'Mai
 // Safe branch for saving records — Owner/Admin records go untagged (visible to all)
 function _saveBranch(){ return canSeeAllBranches() ? '' : (getBranchName() || 'Main Branch'); }
 // Unified branch->slug converter — ensures consistent folder naming everywhere
+// v69.4: known branches = staff-account branches + branches already on patient records
+function _knownBranches(){
+  const m={};
+  const add=b=>{ b=(b||'').trim(); if(b && b!=='—'){ const k=_branchSlug(b); if(!m[k]) m[k]=b; } };
+  try{ Object.values(getAllAccounts()||{}).forEach(a=>add(a.branch)); }catch(e){}
+  try{ Object.values(load(KEYS.patients)||{}).forEach(p=>add(p.branch)); }catch(e){}
+  add('Main Branch');
+  return Object.values(m).sort();
+}
+// v69.4: Owner/Admin pick the branch a new record belongs to (staff stay locked to theirs)
+function _branchPickerRow(cur){
+  if(!canSeeAllBranches()) return '';
+  const list=_knownBranches(); cur=(cur||'').trim()||'Main Branch';
+  if(!list.includes(cur)) list.push(cur);
+  return `<div class="form-group"><label class="form-label">Branch</label>
+  <select class="form-control" id="f_branch">${list.map(b=>`<option value="${_esc(b)}"${b===cur?' selected':''}>${_esc(b)}</option>`).join('')}</select></div>`;
+}
 function _branchSlug(branchName){
   return (branchName||'main_branch').toLowerCase().trim().replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
 }
@@ -3801,6 +3818,7 @@ function filterPatientsTable(q=''){
 function patientForm(d={}){
   return `
     ${formRow('Full Name *','name',d.name)}
+    ${_branchPickerRow(d.branch)}
     ${formRow('Age','age',d.age,'number')}
     ${formRow('Contact No.','contact',d.contact)}
     ${formRow('Email','email',d.email,'email')}
@@ -4114,8 +4132,8 @@ async function showPendingIntake(){
           ${r.allergies?'<br>⚠️ '+_esc(r.allergies).slice(0,60):''}
         </td>
         <td style="white-space:nowrap">
-          <button class="btn btn-sm" style="background:#16A34A;color:#fff" onclick="approveIntake('${r.id}')">✅ Approve</button>
-          <button class="btn btn-danger btn-sm" onclick="rejectIntake('${r.id}')">✕ Reject</button>
+          <button class="btn btn-sm" style="background:#16A34A;color:#fff" onclick="approveIntake('${_esc(r.id)}')">✅ Approve</button>
+          <button class="btn btn-danger btn-sm" onclick="rejectIntake('${_esc(r.id)}')">✕ Reject</button>
         </td>
       </tr>`).join('')}
     </tbody></table>
@@ -4143,6 +4161,21 @@ async function approveIntake(id){
     }
 
     const pts = load(KEYS.patients);
+    // v69.4: online bookings often come from existing patients — match by phone
+    // (digits) or same name+phone before creating a duplicate record
+    const _ct=(r.contact||'').replace(/\D/g,''), _nm=(r.name||'').trim().toLowerCase();
+    const _dup = Object.entries(pts).find(([,p])=>{
+      const pc=(p.contact||'').replace(/\D/g,''), pn=(p.name||'').trim().toLowerCase();
+      return (_ct.length>=7 && pc===_ct && (pn===_nm || !_nm)) || (!_ct && pn && pn===_nm);
+    });
+    if(_dup && (await _confirm(`"${_esc(_dup[1].name)}" already exists (${_dup[0]}${_dup[1].branch?', '+_esc(_dup[1].branch):''}).\n\nOK = use the existing patient (no duplicate)\nCancel = create a new separate record`))){
+      await _sbFetch(`patient_intake?id=eq.${encodeURIComponent(id)}`, 'PATCH', { status:'approved' });
+      _auditLog('UPDATE', 'patients', _dup[0], `Online intake linked to existing patient: ${_esc(r.name)}`);
+      toast(`✅ Linked to existing patient ${_dup[0]}`);
+      showPendingIntake();
+      if(r.procedure || r.preferred_date) _scheduleApptFor(_dup[0], r.procedure, r.preferred_date, r.preferred_time);
+      return;
+    }
     const newId = nextId(pts, 'P');
     const newPatient = {
       name: r.name||'', age: r.age||'', gender: r.gender||'', contact: r.contact||'',
@@ -4512,7 +4545,7 @@ function addPatient(){
       philhealth_has: document.getElementById('f_ph_has')?.checked || false,
       philhealth_member_id: document.getElementById('f_ph_member_id')?.value || '',
       xrays: [],
-      branch: _saveBranch() || 'Main Branch'};
+      branch: fval('branch') || _saveBranch() || 'Main Branch'};
     save(KEYS.patients, pts, id);
     _auditLog('CREATE', 'patients', id, `New patient: ${fval('name')}`);
     closeModal();
@@ -4539,7 +4572,7 @@ async function editPatient(id){
       allergies:fval('allergies'),gender:fval('gender'),
       philhealth_has: document.getElementById('f_ph_has')?.checked || false,
       philhealth_member_id: document.getElementById('f_ph_member_id')?.value || '',
-      branch: p.branch || _saveBranch() || 'Main Branch',
+      branch: fval('branch') || p.branch || _saveBranch() || 'Main Branch',
       updated_at: new Date().toISOString()};
     save(KEYS.patients, pts, id);
     _auditLog('UPDATE', 'patients', id, `Updated: ${fval('name')}`);
@@ -5989,6 +6022,7 @@ function itemForm(d={}){
   return `
     ${formRow('Category','category',d.category||'Consumables',null,['Consumables','Instruments','Medication','PPE','Lab Materials','Equipment','Other'])}
     ${formRow('Item Name *','name',d.name)}
+    ${_branchPickerRow(d.branch)}
     ${formRow('Quantity','quantity',d.quantity||'0','number')}
     ${formRow('Unit','unit',d.unit||'pcs')}
     ${formRow('Reorder Level','reorder',d.reorder||'5','number')}
@@ -6005,7 +6039,7 @@ function addItem(){
     inv[id] = {category:fval('category'),name:fval('name'),quantity:fval('quantity'),
       unit:fval('unit'),reorder:fval('reorder'),unit_cost:fval('unit_cost'),
       supplier:fval('supplier'),expiry:fval('expiry'),
-      branch: _saveBranch() || 'Main Branch'};
+      branch: fval('branch') || _saveBranch() || 'Main Branch'};
     save(KEYS.inventory, inv, id);
     closeModal(); toast('✅ Item added!'); showInventory();
   });
@@ -6019,7 +6053,7 @@ async function editItem(id){
     inv[id] = {...inv[id], category:fval('category'),name:fval('name'),quantity:fval('quantity'),
       unit:fval('unit'),reorder:fval('reorder'),unit_cost:fval('unit_cost'),
       supplier:fval('supplier'),expiry:fval('expiry'),
-      branch: inv[id].branch || _saveBranch() || 'Main Branch',
+      branch: fval('branch') || inv[id].branch || _saveBranch() || 'Main Branch',
       updated_at:new Date().toISOString()};
     save(KEYS.inventory, inv, id);
     closeModal(); toast('✅ Item updated!'); showInventory();
